@@ -110,7 +110,7 @@
       timeout 600 rustup toolchain install 1.82.0 </dev/null
     fi
   args:
-  executable: /bin/bash
+    executable: /bin/bash
 
 - name: Create remote scx directory
   file:
