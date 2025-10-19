@@ -21,8 +21,12 @@
         cache_valid_time: 3600
 
   roles:
-    - swap
-    - kernel
-    - sched_ext
-    - geerlingguy.docker
+    - role: swap
+      tags: swap
+    - role: kernel
+      tags: kernel
+    - role: sched_ext
+      tags: sched_ext
+    - role: geerlingguy.docker
+      tags: docker
 
