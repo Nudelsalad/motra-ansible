@@ -79,6 +79,6 @@
 - name: Assert expected kernel is running (optional)
   assert:
     that:
-      - "kernel_expected_version is not defined or (kernel_expected_version in uname_out.stdout)"
+      - "(kernel_expected_version | default('')) == '' or (kernel_expected_version in uname_out.stdout)"
     fail_msg: "Expected kernel '{{ kernel_expected_version }}' is not running (got '{{ uname_out.stdout }}')."
     success_msg: "Kernel matches expected version {{ kernel_expected_version }}."
