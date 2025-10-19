@@ -112,18 +112,6 @@
   args:
   executable: /bin/bash
 
-# - name: Ensure rustup default toolchain and rustfmt for {{ sched_ext_user_resolved }}
-#   become: true
-#   become_user: "{{ sched_ext_user_resolved }}"
-#   shell: |
-#     set -e
-#     export PATH="$HOME/.cargo/bin:$PATH"
-#     [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
-#     rustup default 1.82.0
-#     rustup component add rustfmt --toolchain 1.82.0
-#   args:
-#     executable: /bin/bash
-
 - name: Create remote scx directory
   file:
     path: "{{ scx_remote_dir }}"
