@@ -92,23 +92,23 @@
   become: true
   become_user: "{{ sched_ext_user_resolved }}"
   shell: |
-  set -euo pipefail
-  export HOME="{{ sched_ext_home }}"
-  export PATH="$HOME/.cargo/bin:$PATH"
-  export RUSTUP_INIT_SKIP_PATH_CHECK=yes
-  if ! command -v rustup >/dev/null 2>&1; then
-  tmpdir="$(mktemp -d)"
-  trap 'rm -rf "${tmpdir}"' EXIT
-  for i in 1 2 3; do
-  if curl -fsSL https://sh.rustup.rs -o "${tmpdir}/rustup-init.sh"; then
-  break
-  fi
-  sleep 2
-  done
-  timeout 600 sh "${tmpdir}/rustup-init.sh" -y --default-toolchain 1.82.0 --no-modify-path --profile minimal </dev/null
-  else
-  timeout 600 rustup toolchain install 1.82.0 </dev/null
-  fi
+    set -euo pipefail
+    export HOME="{{ sched_ext_home }}"
+    export PATH="$HOME/.cargo/bin:$PATH"
+    export RUSTUP_INIT_SKIP_PATH_CHECK=yes
+    if ! command -v rustup >/dev/null 2>&1; then
+      tmpdir="$(mktemp -d)"
+      trap 'rm -rf "${tmpdir}"' EXIT
+      for i in 1 2 3; do
+        if curl -fsSL https://sh.rustup.rs -o "${tmpdir}/rustup-init.sh"; then
+          break
+        fi
+        sleep 2
+      done
+      timeout 600 sh "${tmpdir}/rustup-init.sh" -y --default-toolchain 1.82.0 --no-modify-path --profile minimal </dev/null
+    else
+      timeout 600 rustup toolchain install 1.82.0 </dev/null
+    fi
   args:
   executable: /bin/bash
 
