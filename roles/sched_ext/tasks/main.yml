@@ -20,14 +20,25 @@
     state: present
     update_cache: yes
 
-- name: Ensure rustup and cargo present for {{ ansible_user }}
+- name: Determine sched-ext target user
+  set_fact:
+    sched_ext_user_resolved: "{{ sched_ext_user | default(ansible_user) }}"
+
+- name: Discover home directory for {{ sched_ext_user_resolved }}
+  command: getent passwd {{ sched_ext_user_resolved }}
+  register: sched_ext_passwd_entry
+  changed_when: false
+
+- name: Set sched-ext home directory fact
+  set_fact:
+    sched_ext_home: "{{ sched_ext_passwd_entry.stdout.split(':')[5] }}"
+
+- name: Ensure rustup and cargo present for {{ sched_ext_user_resolved }}
   become: true
-  become_user: "{{ ansible_user }}"
-  vars:
-    rustup_home: "{{ ansible_user_dir | default('/home/' + ansible_user) }}"
+  become_user: "{{ sched_ext_user_resolved }}"
   shell: |
     set -e
-    export HOME="{{ rustup_home }}"
+    export HOME="{{ sched_ext_home }}"
     export PATH="$HOME/.cargo/bin:$PATH"
     if ! command -v rustup >/dev/null 2>&1; then
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.82.0
@@ -36,8 +47,6 @@
     fi
   args:
     executable: /bin/bash
-  environment:
-    PATH: "{{ ansible_env.PATH }}"
 - name: Create remote scx directory
   file:
     path: "{{ scx_remote_dir }}"
@@ -61,16 +70,18 @@
     params:
       INSTALL_DIR: "{{ scx_install_dir }}"
 
-- name: Ensure cargo bin path is present for {{ ansible_user }}
-  become: false
+- name: Ensure cargo bin path is present for {{ sched_ext_user_resolved }}
+  become: true
+  become_user: "{{ sched_ext_user_resolved }}"
   lineinfile:
-    path: "{{ ansible_env.HOME }}/.profile"
+    path: "{{ sched_ext_home }}/.profile"
     line: 'export PATH="$HOME/.cargo/bin:$PATH"'
     create: yes
     state: present
 
 - name: Install Rust schedulers
-  become: false
+  become: true
+  become_user: "{{ sched_ext_user_resolved }}"
   shell: |
     set -e
     export PATH="$HOME/.cargo/bin:$PATH"
