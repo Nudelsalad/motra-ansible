@@ -32,6 +32,35 @@
     mode: '0644'
   when: kernel_version is defined and kernel_version | length > 0
 
+- name: Install post-install hook to restore overlays README
+  copy:
+    dest: /etc/kernel/postinst.d/00-ensure-overlays-readme
+    mode: '0755'
+    content: |
+      #!/bin/sh
+      set -eu
+
+      version="${1:-}"
+      image_dir="/usr/lib/linux-image-${version}"
+      overlays_dir="${image_dir}/overlays"
+
+      if [ -z "${version}" ]; then
+        exit 0
+      fi
+
+      if [ ! -d "${overlays_dir}" ]; then
+        mkdir -p "${overlays_dir}"
+      fi
+
+      if [ ! -f "${overlays_dir}/README" ]; then
+        cat <<'EOF' > "${overlays_dir}/README"
+This placeholder README ensures the Raspberry Pi firmware post-install step succeeds when
+the linux-image package does not ship the file.
+EOF
+      fi
+
+      exit 0
+
 - name: Install kernel .deb files from remote temp dir
   apt:
     deb: "{{ item.dest }}"
