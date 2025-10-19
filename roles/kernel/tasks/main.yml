@@ -46,16 +46,6 @@
     state: absent
   when: kernel_tmp.path is defined
 
-- name: Ensure flash-kernel is installed (Ubuntu on RPi)
-  apt:
-    name: flash-kernel
-    state: present
-  when: ansible_distribution == 'Ubuntu'
-
-- name: Update boot files via flash-kernel (Ubuntu)
-  command: flash-kernel
-  when: ansible_distribution == 'Ubuntu'
-
 - name: Update bootloader (Raspberry Pi OS)
   apt:
     name: rpi-eeprom
@@ -82,3 +72,4 @@
       - "(kernel_expected_version | default('')) == '' or (kernel_expected_version in uname_out.stdout)"
     fail_msg: "Expected kernel '{{ kernel_expected_version }}' is not running (got '{{ uname_out.stdout }}')."
     success_msg: "Kernel matches expected version {{ kernel_expected_version }}."
+  when: kernel_expected_version is defined
