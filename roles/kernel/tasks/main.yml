@@ -53,10 +53,10 @@
       fi
 
       if [ ! -f "${overlays_dir}/README" ]; then
-        cat <<'EOF' > "${overlays_dir}/README"
-This placeholder README ensures the Raspberry Pi firmware post-install step succeeds when
-the linux-image package does not ship the file.
-EOF
+        printf '%s\n' \
+          'This placeholder README ensures the Raspberry Pi firmware post-install step succeeds when' \
+          'the linux-image package does not ship the file.' \
+          > "${overlays_dir}/README"
       fi
 
       exit 0
