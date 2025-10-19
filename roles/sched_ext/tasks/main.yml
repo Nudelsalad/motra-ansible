@@ -88,7 +88,33 @@
   set_fact:
     sched_ext_home: "{{ sched_ext_passwd_entry.stdout.split(':')[5] }}"
 
-- name: Ensure rustup and cargo present for {{ sched_ext_user_resolved }}
+- name: Check for existing rustup installation
+  become: true
+  become_user: "{{ sched_ext_user_resolved }}"
+  command: command -v rustup
+  register: rustup_check
+  changed_when: false
+  failed_when: false
+
+- name: Ensure rustup installer cache directory exists
+  become: true
+  become_user: "{{ sched_ext_user_resolved }}"
+  file:
+    path: "{{ sched_ext_home }}/.cache"
+    state: directory
+    mode: '0755'
+  when: rustup_check.rc != 0
+
+- name: Download rustup installer script
+  become: true
+  become_user: "{{ sched_ext_user_resolved }}"
+  get_url:
+    url: https://sh.rustup.rs
+    dest: "{{ sched_ext_home }}/.cache/rustup-init.sh"
+    mode: '0755'
+  when: rustup_check.rc != 0
+
+- name: Install rustup 1.82.0 for {{ sched_ext_user_resolved }}
   become: true
   become_user: "{{ sched_ext_user_resolved }}"
   shell: |
@@ -96,19 +122,42 @@
     export HOME="{{ sched_ext_home }}"
     export PATH="$HOME/.cargo/bin:$PATH"
     export RUSTUP_INIT_SKIP_PATH_CHECK=yes
-    if ! command -v rustup >/dev/null 2>&1; then
-      tmpdir="$(mktemp -d)"
-      trap 'rm -rf "${tmpdir}"' EXIT
-      for i in 1 2 3; do
-        if curl -fsSL https://sh.rustup.rs -o "${tmpdir}/rustup-init.sh"; then
-          break
-        fi
-        sleep 2
-      done
-      timeout 600 sh "${tmpdir}/rustup-init.sh" -y --default-toolchain 1.82.0 --no-modify-path --profile minimal </dev/null
-    else
-      timeout 600 rustup toolchain install 1.82.0 </dev/null
-    fi
+    "{{ sched_ext_home }}/.cache/rustup-init.sh" -y --default-toolchain 1.82.0 --no-modify-path --profile minimal
+  args:
+    executable: /bin/bash
+    chdir: "{{ sched_ext_home }}"
+  when: rustup_check.rc != 0
+
+- name: Ensure rustup toolchain 1.82.0 is installed
+  become: true
+  become_user: "{{ sched_ext_user_resolved }}"
+  shell: |
+    set -euo pipefail
+    export HOME="{{ sched_ext_home }}"
+    export PATH="$HOME/.cargo/bin:$PATH"
+    rustup toolchain install 1.82.0
+  args:
+    executable: /bin/bash
+
+- name: Set rustup default toolchain to 1.82.0
+  become: true
+  become_user: "{{ sched_ext_user_resolved }}"
+  shell: |
+    set -euo pipefail
+    export HOME="{{ sched_ext_home }}"
+    export PATH="$HOME/.cargo/bin:$PATH"
+    rustup default 1.82.0
+  args:
+    executable: /bin/bash
+
+- name: Ensure rustfmt component present for toolchain 1.82.0
+  become: true
+  become_user: "{{ sched_ext_user_resolved }}"
+  shell: |
+    set -euo pipefail
+    export HOME="{{ sched_ext_home }}"
+    export PATH="$HOME/.cargo/bin:$PATH"
+    rustup component add rustfmt --toolchain 1.82.0
   args:
     executable: /bin/bash
 
