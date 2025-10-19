@@ -21,20 +21,23 @@
     update_cache: yes
 
 - name: Ensure rustup and cargo present for {{ ansible_user }}
-  become: false
+  become: true
+  become_user: "{{ ansible_user }}"
+  vars:
+    rustup_home: "{{ ansible_user_dir | default('/home/' + ansible_user) }}"
   shell: |
     set -e
+    export HOME="{{ rustup_home }}"
+    export PATH="$HOME/.cargo/bin:$PATH"
     if ! command -v rustup >/dev/null 2>&1; then
       curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.82.0
     else
       rustup toolchain install 1.82.0
     fi
-    echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> "$HOME/.profile"
   args:
     executable: /bin/bash
   environment:
-    HOME: "{{ ansible_env.HOME }}"
-    USER: "{{ ansible_user }}"
+    PATH: "{{ ansible_env.PATH }}"
 - name: Create remote scx directory
   file:
     path: "{{ scx_remote_dir }}"
