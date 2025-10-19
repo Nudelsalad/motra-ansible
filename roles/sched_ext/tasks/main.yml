@@ -21,7 +21,8 @@
 - name: Install LLVM toolchain 20
   shell: |
     set -e
-    curl -sSL https://apt.llvm.org/llvm.sh | bash -s -- 20
+    export DEBIAN_FRONTEND=noninteractive
+    curl -sSL https://apt.llvm.org/llvm.sh | bash -s -- 20 all
   args:
     executable: /bin/bash
     creates: /usr/bin/clang-20
