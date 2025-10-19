@@ -96,12 +96,14 @@
     export HOME="{{ sched_ext_home }}"
     export PATH="$HOME/.cargo/bin:$PATH"
     if ! command -v rustup >/dev/null 2>&1; then
-      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.82.0
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.82.0 --no-modify-path
     else
       rustup toolchain install 1.82.0
     fi
   args:
     executable: /bin/bash
+  environment:
+    RUSTUP_INIT_SKIP_PATH_CHECK: "yes"
 
 - name: Ensure rustup default toolchain and rustfmt for {{ sched_ext_user_resolved }}
   become: true
