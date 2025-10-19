@@ -12,7 +12,6 @@
       - gnupg
       - curl
       - wget
-      - software-properties-common
       - libseccomp-dev
       - git
       - rsync
