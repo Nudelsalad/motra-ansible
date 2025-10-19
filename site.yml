@@ -12,7 +12,7 @@
     scx_remote_dir: /opt/scx
     scx_install_dir: /usr/local/bin
     install_rust_schedulers: true
-  sched_ext_user: las3
+    sched_ext_user: las3
 
   pre_tasks:
     - name: Update apt cache
