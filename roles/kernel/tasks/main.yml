@@ -14,6 +14,24 @@
     - "{{ kernel_deb_dir }}/*.deb"
   register: copied_debs
 
+- name: Derive kernel version from linux-image .deb filename
+  set_fact:
+    kernel_version: "{{ (copied_debs.results | map(attribute='dest') | map('basename') | select('match','^linux-image-.*\\.deb$') | list | first | regex_replace('^linux-image-(.+)_.+\\.deb$','\\1')) }}"
+
+- name: Pre-create overlays directory expected by postinst
+  file:
+    path: "/usr/lib/linux-image-{{ kernel_version }}/overlays"
+    state: directory
+    mode: '0755'
+  when: kernel_version is defined and kernel_version | length > 0
+
+- name: Ensure overlays README exists
+  file:
+    path: "/usr/lib/linux-image-{{ kernel_version }}/overlays/README"
+    state: touch
+    mode: '0644'
+  when: kernel_version is defined and kernel_version | length > 0
+
 - name: Install kernel .deb files from remote temp dir
   apt:
     deb: "{{ item.dest }}"
