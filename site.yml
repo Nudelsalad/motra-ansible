@@ -21,6 +21,7 @@
 
   roles:
     - swap
-    - docker
     - kernel
     - sched_ext
+    - geerlingguy.docker
+
