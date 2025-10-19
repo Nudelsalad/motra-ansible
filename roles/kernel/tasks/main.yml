@@ -8,22 +8,41 @@
 - name: Copy kernel .deb files to target
   copy:
     src: "{{ item }}"
-    dest: "{{ kernel_tmp.path }}/"
+    dest: "{{ kernel_tmp.path }}/{{ item | basename }}"
     mode: '0644'
   with_fileglob:
     - "{{ kernel_deb_dir }}/*.deb"
+  register: copied_debs
 
-- name: Install kernel .deb files
+- name: Install kernel .deb files from remote temp dir
   apt:
-    deb: "{{ item }}"
+    deb: "{{ item.dest }}"
     state: present
-  loop: "{{ lookup('ansible.builtin.fileglob', kernel_deb_dir + '/*.deb', wantlist=True) }}"
+  loop: "{{ copied_debs.results }}"
+  loop_control:
+    label: "{{ item.dest | basename }}"
 
-- name: Update bootloader
+- name: Clean up remote temp directory
+  file:
+    path: "{{ kernel_tmp.path }}"
+    state: absent
+  when: kernel_tmp.path is defined
+
+- name: Ensure flash-kernel is installed (Ubuntu on RPi)
+  apt:
+    name: flash-kernel
+    state: present
+  when: ansible_distribution == 'Ubuntu'
+
+- name: Update boot files via flash-kernel (Ubuntu)
+  command: flash-kernel
+  when: ansible_distribution == 'Ubuntu'
+
+- name: Update bootloader (Raspberry Pi OS)
   apt:
     name: rpi-eeprom
     state: present
-  when: ansible_architecture == 'aarch64'
+  when: ansible_distribution == 'Raspbian' or ansible_distribution == 'Raspberry Pi OS'
 
 - name: Reboot after kernel install
   reboot:
