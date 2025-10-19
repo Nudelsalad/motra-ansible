@@ -1,0 +1,26 @@
+---
+- name: Provision Raspberry Pi with kernel, Docker, and sched-ext
+  hosts: rpi
+  become: true
+  vars:
+    swap_file: /swapfile_scx
+    swap_size_mib: 4096
+    docker_users:
+      - "{{ ansible_user }}"
+    kernel_deb_dir: "{{ playbook_dir }}/kernel"
+    scx_source_dir: "{{ playbook_dir }}/../..//scx"  # fallback if needed
+    scx_remote_dir: /opt/scx
+    scx_install_dir: /usr/local/bin
+    install_rust_schedulers: true
+
+  pre_tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+  roles:
+    - swap
+    - docker
+    - kernel
+    - sched_ext

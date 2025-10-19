@@ -1,0 +1,47 @@
+---
+- name: Create remote temp directory
+  tempfile:
+    state: directory
+    suffix: kernel
+  register: kernel_tmp
+
+- name: Copy kernel .deb files to target
+  copy:
+    src: "{{ item }}"
+    dest: "{{ kernel_tmp.path }}/"
+    mode: '0644'
+  with_fileglob:
+    - "{{ kernel_deb_dir }}/*.deb"
+
+- name: Install kernel .deb files
+  apt:
+    deb: "{{ item }}"
+    state: present
+  loop: "{{ lookup('ansible.builtin.fileglob', kernel_deb_dir + '/*.deb', wantlist=True) }}"
+
+- name: Update bootloader
+  apt:
+    name: rpi-eeprom
+    state: present
+  when: ansible_architecture == 'aarch64'
+
+- name: Reboot after kernel install
+  reboot:
+    msg: "Rebooting after kernel installation"
+    reboot_timeout: 600
+
+- name: Verify kernel version after reboot
+  command: uname -r
+  register: uname_out
+  changed_when: false
+
+- name: Show running kernel
+  debug:
+    msg: "Running kernel: {{ uname_out.stdout }}"
+
+- name: Assert expected kernel is running (optional)
+  assert:
+    that:
+      - "kernel_expected_version is not defined or (kernel_expected_version in uname_out.stdout)"
+    fail_msg: "Expected kernel '{{ kernel_expected_version }}' is not running (got '{{ uname_out.stdout }}')."
+    success_msg: "Kernel matches expected version {{ kernel_expected_version }}."

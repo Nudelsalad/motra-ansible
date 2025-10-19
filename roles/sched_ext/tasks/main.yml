@@ -1,0 +1,78 @@
+---
+- name: Install dependencies for sched-ext
+  apt:
+    name:
+      - build-essential
+      - bpftool
+      - libbpf-dev
+      - libelf-dev
+      - libzstd-dev
+      - pkg-config
+      - clang
+      - llvm
+      - ca-certificates
+      - zlib1g-dev
+      - gnupg
+      - curl
+      - wget
+      - libseccomp-dev
+      - git
+    state: present
+    update_cache: yes
+
+- name: Ensure rustup and cargo present for {{ ansible_user }}
+  become: false
+  shell: |
+    set -e
+    if ! command -v rustup >/dev/null 2>&1; then
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.82.0
+    else
+      rustup toolchain install 1.82.0
+    fi
+    echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> "$HOME/.profile"
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "{{ ansible_env.HOME }}"
+    USER: "{{ ansible_user }}"
+- name: Create remote scx directory
+  file:
+    path: "{{ scx_remote_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Clone scx repository at specified version
+  git:
+    repo: https://github.com/sched-ext/scx.git
+    dest: "{{ scx_remote_dir }}"
+    version: "{{ scx_version | default('v1.0.17') }}"
+    force: yes
+    recursive: yes
+    update: yes
+    accept_hostkey: yes
+
+- name: Install C schedulers
+  make:
+    chdir: "{{ scx_remote_dir }}"
+    target: install
+    params:
+      INSTALL_DIR: "{{ scx_install_dir }}"
+
+- name: Ensure cargo bin path is present for {{ ansible_user }}
+  become: false
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.profile"
+    line: 'export PATH="$HOME/.cargo/bin:$PATH"'
+    create: yes
+    state: present
+
+- name: Install Rust schedulers
+  become: false
+  shell: |
+    set -e
+    export PATH="$HOME/.cargo/bin:$PATH"
+    cd {{ scx_remote_dir }}
+    ls -d scheds/rust/scx_* | xargs -I{} cargo install --locked --path {}
+  args:
+    executable: /bin/bash
+  when: install_rust_schedulers | bool
