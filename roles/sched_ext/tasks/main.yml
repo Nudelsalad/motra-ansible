@@ -120,7 +120,7 @@
   shell: |
     set -euo pipefail
     export HOME="{{ sched_ext_home }}"
-    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
     export RUSTUP_INIT_SKIP_PATH_CHECK=yes
     "{{ sched_ext_home }}/.cache/rustup-init.sh" -y --default-toolchain 1.82.0 --no-modify-path --profile minimal
   args:
@@ -134,7 +134,7 @@
   shell: |
     set -euo pipefail
     export HOME="{{ sched_ext_home }}"
-    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
     rustup toolchain install 1.82.0
   args:
     executable: /bin/bash
@@ -145,7 +145,7 @@
   shell: |
     set -euo pipefail
     export HOME="{{ sched_ext_home }}"
-    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
     rustup default 1.82.0
   args:
     executable: /bin/bash
@@ -156,7 +156,7 @@
   shell: |
     set -euo pipefail
     export HOME="{{ sched_ext_home }}"
-    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
     rustup component add rustfmt --toolchain 1.82.0
   args:
     executable: /bin/bash
@@ -192,7 +192,7 @@
   become_user: "{{ sched_ext_user_resolved }}"
   shell: |
     set -e
-    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
     export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH}"
     [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
     cd "$HOME/scx"
@@ -210,6 +210,7 @@
   environment:
     CC: clang
     PKG_CONFIG_PATH: "/usr/local/lib/pkgconfig:{{ ansible_env.PKG_CONFIG_PATH | default('') }}"
+    PATH: "/usr/sbin:/usr/bin:/sbin:/bin:{{ sched_ext_home }}/.cargo/bin:{{ ansible_env.PATH | default('') }}"
 
 - name: Ensure cargo bin path is present for {{ sched_ext_user_resolved }}
   become: true
@@ -225,7 +226,7 @@
   become_user: "{{ sched_ext_user_resolved }}"
   shell: |
     set -e
-    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
     export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH}"
     [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
     cd "{{ sched_ext_home }}/scx"
