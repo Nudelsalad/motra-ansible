@@ -1,0 +1,21 @@
+---
+# Defaults for sched_ext role
+
+# User to run cargo install as
+sched_ext_user: "las3"
+
+# Whether to clone the scx repo (for reference/examples)
+scx_clone_repo: false
+scx_clone_dir: "/home/{{ sched_ext_user }}/scx"
+scx_version: "v1.0.17"
+
+# Schedulers and tools to install from crates.io
+# Customize this list to install only what you need
+scx_crates_to_install:
+  - scxctl
+  - scxtop
+  - scx_loader
+  - scx_flash
+  - scx_lavd
+  - scx_rusty
+  - scx_bpfland

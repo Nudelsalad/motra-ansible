@@ -9,7 +9,7 @@
   copy:
     src: "{{ item }}"
     dest: "{{ kernel_tmp.path }}/{{ item | basename }}"
-    mode: '0644'
+    mode: "0644"
   with_fileglob:
     - "{{ kernel_deb_dir }}/*.deb"
   register: copied_debs
@@ -17,51 +17,24 @@
 - name: Derive kernel version from linux-image .deb filename
   set_fact:
     kernel_version: "{{ (copied_debs.results | map(attribute='dest') | map('basename') | select('match','^linux-image-.*\\.deb$') | list | first | regex_replace('^linux-image-(.+)_.+\\.deb$','\\1')) }}"
+  when: copied_debs.results | length > 0
 
-- name: Pre-create overlays directory expected by postinst
+- name: Pre-create overlays directory for Raspberry Pi kernel
   file:
     path: "/usr/lib/linux-image-{{ kernel_version }}/overlays"
     state: directory
-    mode: '0755'
-  when: kernel_version is defined and kernel_version | length > 0
+    mode: "0755"
+  when: kernel_version is defined
 
 - name: Ensure overlays README exists
-  file:
-    path: "/usr/lib/linux-image-{{ kernel_version }}/overlays/README"
-    state: touch
-    mode: '0644'
-  when: kernel_version is defined and kernel_version | length > 0
-
-- name: Install post-install hook to restore overlays README
   copy:
-    dest: /etc/kernel/postinst.d/00-ensure-overlays-readme
-    mode: '0755'
+    dest: "/usr/lib/linux-image-{{ kernel_version }}/overlays/README"
     content: |
-      #!/bin/sh
-      set -eu
+      This placeholder ensures the Raspberry Pi firmware post-install step succeeds.
+    mode: "0644"
+  when: kernel_version is defined
 
-      version="${1:-}"
-      image_dir="/usr/lib/linux-image-${version}"
-      overlays_dir="${image_dir}/overlays"
-
-      if [ -z "${version}" ]; then
-        exit 0
-      fi
-
-      if [ ! -d "${overlays_dir}" ]; then
-        mkdir -p "${overlays_dir}"
-      fi
-
-      if [ ! -f "${overlays_dir}/README" ]; then
-        printf '%s\n' \
-          'This placeholder README ensures the Raspberry Pi firmware post-install step succeeds when' \
-          'the linux-image package does not ship the file.' \
-          > "${overlays_dir}/README"
-      fi
-
-      exit 0
-
-- name: Install kernel .deb files from remote temp dir
+- name: Install kernel .deb packages
   apt:
     deb: "{{ item.dest }}"
     state: present
@@ -69,24 +42,17 @@
   loop_control:
     label: "{{ item.dest | basename }}"
 
-- name: Clean up remote temp directory
+- name: Clean up temp directory
   file:
     path: "{{ kernel_tmp.path }}"
     state: absent
-  when: kernel_tmp.path is defined
 
-- name: Update bootloader (Raspberry Pi OS)
-  apt:
-    name: rpi-eeprom
-    state: present
-  when: ansible_distribution == 'Raspbian' or ansible_distribution == 'Raspberry Pi OS'
-
-- name: Reboot after kernel install
+- name: Reboot to activate new kernel
   reboot:
     msg: "Rebooting after kernel installation"
     reboot_timeout: 600
 
-- name: Verify kernel version after reboot
+- name: Verify running kernel version
   command: uname -r
   register: uname_out
   changed_when: false
@@ -95,10 +61,9 @@
   debug:
     msg: "Running kernel: {{ uname_out.stdout }}"
 
-- name: Assert expected kernel is running (optional)
+- name: Assert expected kernel version (optional)
   assert:
     that:
-      - "(kernel_expected_version | default('')) == '' or (kernel_expected_version in uname_out.stdout)"
-    fail_msg: "Expected kernel '{{ kernel_expected_version }}' is not running (got '{{ uname_out.stdout }}')."
-    success_msg: "Kernel matches expected version {{ kernel_expected_version }}."
+      - kernel_expected_version in uname_out.stdout
+    fail_msg: "Expected '{{ kernel_expected_version }}', got '{{ uname_out.stdout }}'"
   when: kernel_expected_version is defined

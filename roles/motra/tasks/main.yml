@@ -1,0 +1,32 @@
+---
+- name: Install docker compose plugin
+  apt:
+    name: docker-compose-plugin
+    state: present
+    update_cache: yes
+
+- name: Clone motra images repository
+  git:
+    repo: "{{ motra_repo_url }}"
+    dest: "{{ motra_clone_dir }}"
+    version: "{{ motra_version }}"
+    force: yes
+
+- name: Sync motra to user directory
+  become: true
+  become_user: "{{ motra_user }}"
+  synchronize:
+    src: "{{ motra_clone_dir }}/"
+    dest: "{{ motra_user_dir }}/"
+    delete: yes
+  delegate_to: "{{ inventory_hostname }}"
+
+- name: Start motra compose stack
+  become: true
+  become_user: "{{ motra_user }}"
+  shell: docker compose up -d
+  args:
+    chdir: "{{ motra_user_dir }}"
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ motra_user }}"

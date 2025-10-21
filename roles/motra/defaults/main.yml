@@ -1,0 +1,13 @@
+---
+# Defaults for motra role
+
+# User to run docker compose as
+motra_user: "las3"
+
+# Motra repository
+motra_repo_url: "https://github.com/Laboratory-for-Safe-and-Secure-Systems/motra-images.git"
+motra_version: "main"
+
+# Clone to system directory, then sync to user home
+motra_clone_dir: "/opt/motra-images"
+motra_user_dir: "/home/{{ motra_user }}/motra"

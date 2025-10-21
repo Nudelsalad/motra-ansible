@@ -1,5 +1,5 @@
 ---
-- name: Install dependencies for sched-ext
+- name: Install minimal dependencies for sched-ext
   apt:
     name:
       - build-essential
@@ -7,230 +7,58 @@
       - libelf-dev
       - libzstd-dev
       - pkg-config
-      - ca-certificates
-      - zlib1g-dev
-      - gnupg
-      - curl
-      - wget
-      - libseccomp-dev
       - git
-      - rsync
+      - curl
     state: present
     update_cache: yes
 
-- name: Install LLVM toolchain 20
-  shell: |
-    set -e
-    export DEBIAN_FRONTEND=noninteractive
-    curl -sSL https://apt.llvm.org/llvm.sh | bash -s -- 20 all
-  args:
-    executable: /bin/bash
-    creates: /usr/bin/clang-20
-
-- name: Query clang alternative
-  command: update-alternatives --query clang
-  register: clang_alternative
-  failed_when: clang_alternative.rc not in [0, 2]
-  changed_when: false
-
-- name: Ensure clang alternative points to clang-20
-  command: update-alternatives --install /usr/bin/clang clang /usr/bin/clang-20 200
-  when: clang_alternative.rc != 0 or ('/usr/bin/clang-20' not in (clang_alternative.stdout | default('')))
-
-- name: Query clang++ alternative
-  command: update-alternatives --query clang++
-  register: clangxx_alternative
-  failed_when: clangxx_alternative.rc not in [0, 2]
-  changed_when: false
-
-- name: Ensure clang++ alternative points to clang++-20
-  command: update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 200
-  when: clangxx_alternative.rc != 0 or ('/usr/bin/clang++-20' not in (clangxx_alternative.stdout | default('')))
-
-- name: Query llvm-strip alternative
-  command: update-alternatives --query llvm-strip
-  register: llvmstrip_alternative
-  failed_when: llvmstrip_alternative.rc not in [0, 2]
-  changed_when: false
-
-- name: Ensure llvm-strip alternative points to llvm-strip-20
-  command: update-alternatives --install /usr/bin/llvm-strip llvm-strip /usr/bin/llvm-strip-20 200
-  when: llvmstrip_alternative.rc != 0 or ('/usr/bin/llvm-strip-20' not in (llvmstrip_alternative.stdout | default('')))
-
-- name: Build and install libbpf {{ scx_libbpf_version | default('1.5.0') }} from source
-  shell: |
-    set -e
-    LIBBPF_VERSION="{{ scx_libbpf_version | default('1.5.0') }}"
-    TMPDIR="$(mktemp -d)"
-    trap 'rm -rf "$TMPDIR"' EXIT
-    curl -sSL "https://github.com/libbpf/libbpf/archive/refs/tags/v${LIBBPF_VERSION}.tar.gz" \
-      | tar -xz --strip-components=1 -C "$TMPDIR"
-    make -C "$TMPDIR/src"
-    make -C "$TMPDIR/src" install PREFIX=/usr/local LIBDIR=/usr/local/lib
-    make -C "$TMPDIR/src" install_headers PREFIX=/usr/local
-    make -C "$TMPDIR/src" install_pkgconfig PREFIX=/usr/local LIBDIR=/usr/local/lib
-    ldconfig
-  args:
-    executable: /bin/bash
-    creates: /usr/local/lib/pkgconfig/libbpf.pc
-
-- name: Determine sched-ext target user
-  set_fact:
-    sched_ext_user_resolved: "{{ sched_ext_user | default(ansible_user) }}"
-
-- name: Discover home directory for {{ sched_ext_user_resolved }}
-  command: getent passwd {{ sched_ext_user_resolved }}
-  register: sched_ext_passwd_entry
-  changed_when: false
-  failed_when: sched_ext_passwd_entry.stdout == ''
-
-- name: Set sched-ext home directory fact
-  set_fact:
-    sched_ext_home: "{{ sched_ext_passwd_entry.stdout.split(':')[5] }}"
-
 - name: Check for existing rustup installation
   become: true
-  become_user: "{{ sched_ext_user_resolved }}"
+  become_user: "{{ sched_ext_user }}"
   command: command -v rustup
   register: rustup_check
   changed_when: false
   failed_when: false
 
-- name: Ensure rustup installer cache directory exists
+- name: Install rustup for {{ sched_ext_user }}
   become: true
-  become_user: "{{ sched_ext_user_resolved }}"
-  file:
-    path: "{{ sched_ext_home }}/.cache"
-    state: directory
-    mode: '0755'
-  when: rustup_check.rc != 0
-
-- name: Download rustup installer script
-  become: true
-  become_user: "{{ sched_ext_user_resolved }}"
-  get_url:
-    url: https://sh.rustup.rs
-    dest: "{{ sched_ext_home }}/.cache/rustup-init.sh"
-    mode: '0755'
-  when: rustup_check.rc != 0
-
-- name: Install rustup 1.82.0 for {{ sched_ext_user_resolved }}
-  become: true
-  become_user: "{{ sched_ext_user_resolved }}"
+  become_user: "{{ sched_ext_user }}"
   shell: |
     set -euo pipefail
-    export HOME="{{ sched_ext_home }}"
-    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
-    export RUSTUP_INIT_SKIP_PATH_CHECK=yes
-    "{{ sched_ext_home }}/.cache/rustup-init.sh" -y --default-toolchain 1.82.0 --no-modify-path --profile minimal
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.82.0 --profile minimal
   args:
     executable: /bin/bash
-    chdir: "{{ sched_ext_home }}"
-  when: rustup_check.rc != 0
-
-- name: Ensure rustup toolchain 1.82.0 is installed
-  become: true
-  become_user: "{{ sched_ext_user_resolved }}"
-  shell: |
-    set -euo pipefail
-    export HOME="{{ sched_ext_home }}"
-    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
-    rustup toolchain install 1.82.0
-  args:
-    executable: /bin/bash
-
-- name: Set rustup default toolchain to 1.82.0
-  become: true
-  become_user: "{{ sched_ext_user_resolved }}"
-  shell: |
-    set -euo pipefail
-    export HOME="{{ sched_ext_home }}"
-    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
-    rustup default 1.82.0
-  args:
-    executable: /bin/bash
-
-- name: Ensure rustfmt component present for toolchain 1.82.0
-  become: true
-  become_user: "{{ sched_ext_user_resolved }}"
-  shell: |
-    set -euo pipefail
-    export HOME="{{ sched_ext_home }}"
-    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
-    rustup component add rustfmt --toolchain 1.82.0
-  args:
-    executable: /bin/bash
-
-- name: Create remote scx directory
-  file:
-    path: "{{ scx_remote_dir }}"
-    state: directory
-    mode: '0755'
-
-- name: Clone scx repository at specified version
-  git:
-    repo: https://github.com/sched-ext/scx.git
-    dest: "{{ scx_remote_dir }}"
-    version: "{{ scx_version | default('v1.0.17') }}"
-    force: yes
-    recursive: yes
-    update: yes
-    accept_hostkey: yes
-
-- name: Sync scx sources into {{ sched_ext_home }}/scx
-  become: true
-  become_user: "{{ sched_ext_user_resolved }}"
-  shell: |
-    set -e
-    mkdir -p "$HOME/scx"
-    rsync -a --delete "{{ scx_remote_dir }}/" "$HOME/scx/"
-  args:
-    executable: /bin/bash
-
-- name: Build sched-ext tree as {{ sched_ext_user_resolved }}
-  become: true
-  become_user: "{{ sched_ext_user_resolved }}"
-  shell: |
-    set -e
-    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
-    export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH}"
-    [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
-    cd "$HOME/scx"
-    export CC=clang
-    make -j"$(nproc)" all
-  args:
-    executable: /bin/bash
-
-- name: Install C schedulers
-  make:
-    chdir: "{{ sched_ext_home }}/scx"
-    target: install
-    params:
-      INSTALL_DIR: "{{ scx_install_dir }}"
   environment:
-    CC: clang
-    PKG_CONFIG_PATH: "/usr/local/lib/pkgconfig:{{ ansible_env.PKG_CONFIG_PATH | default('') }}"
-    PATH: "/usr/sbin:/usr/bin:/sbin:/bin:{{ sched_ext_home }}/.cargo/bin:{{ ansible_env.PATH | default('') }}"
+    HOME: "/home/{{ sched_ext_user }}"
+  when: rustup_check.rc != 0
 
-- name: Ensure cargo bin path is present for {{ sched_ext_user_resolved }}
+- name: Ensure cargo bin is in PATH
   become: true
-  become_user: "{{ sched_ext_user_resolved }}"
+  become_user: "{{ sched_ext_user }}"
   lineinfile:
-    path: "{{ sched_ext_home }}/.profile"
+    path: "/home/{{ sched_ext_user }}/.profile"
     line: 'export PATH="$HOME/.cargo/bin:$PATH"'
     create: yes
     state: present
 
-- name: Install Rust schedulers
+- name: Clone scx repository (optional, for reference/examples)
+  git:
+    repo: https://github.com/sched-ext/scx.git
+    dest: "{{ scx_clone_dir }}"
+    version: "{{ scx_version }}"
+    force: yes
+  when: scx_clone_repo | bool
+
+- name: Install sched-ext schedulers and tools from crates.io
   become: true
-  become_user: "{{ sched_ext_user_resolved }}"
+  become_user: "{{ sched_ext_user }}"
   shell: |
-    set -e
-    export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin:$PATH"
-    export PKG_CONFIG_PATH="/usr/local/lib/pkgconfig:${PKG_CONFIG_PATH}"
-    [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
-    cd "{{ sched_ext_home }}/scx"
-    find scheds/rust -maxdepth 1 -type d -name 'scx_*' -print0 | sort -z | xargs -0 -I{} cargo install --locked --path {}
+    set -euo pipefail
+    export PATH="$HOME/.cargo/bin:$PATH"
+    cargo install {{ item }}
   args:
     executable: /bin/bash
-  when: install_rust_schedulers | bool
+  environment:
+    HOME: "/home/{{ sched_ext_user }}"
+  loop: "{{ scx_crates_to_install }}"
+  when: scx_crates_to_install | length > 0
