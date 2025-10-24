@@ -27,35 +27,16 @@
     executable: /bin/bash
     creates: /usr/bin/clang-20
 
-- name: Query clang alternative
-  command: update-alternatives --query clang
-  register: clang_alternative
-  failed_when: clang_alternative.rc not in [0, 2]
-  changed_when: false
-
-- name: Ensure clang alternative points to clang-20
-  command: update-alternatives --install /usr/bin/clang clang /usr/bin/clang-20 200
-  when: clang_alternative.rc != 0 or ('/usr/bin/clang-20' not in (clang_alternative.stdout | default('')))
-
-- name: Query clang++ alternative
-  command: update-alternatives --query clang++
-  register: clangxx_alternative
-  failed_when: clangxx_alternative.rc not in [0, 2]
-  changed_when: false
-
-- name: Ensure clang++ alternative points to clang++-20
-  command: update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 200
-  when: clangxx_alternative.rc != 0 or ('/usr/bin/clang++-20' not in (clangxx_alternative.stdout | default('')))
-
-- name: Query llvm-strip alternative
-  command: update-alternatives --query llvm-strip
-  register: llvmstrip_alternative
-  failed_when: llvmstrip_alternative.rc not in [0, 2]
-  changed_when: false
-
-- name: Ensure llvm-strip alternative points to llvm-strip-20
-  command: update-alternatives --install /usr/bin/llvm-strip llvm-strip /usr/bin/llvm-strip-20 200
-  when: llvmstrip_alternative.rc != 0 or ('/usr/bin/llvm-strip-20' not in (llvmstrip_alternative.stdout | default('')))
+- name: Ensure LLVM tools point to version 20
+  alternatives:
+    name: "{{ item.name }}"
+    link: "/usr/bin/{{ item.name }}"
+    path: "/usr/bin/{{ item.path }}"
+    priority: 200
+  loop:
+    - { name: "clang", path: "clang-20" }
+    - { name: "clang++", path: "clang++-20" }
+    - { name: "llvm-strip", path: "llvm-strip-20" }
 
 - name: Build and install libbpf {{ scx_libbpf_version | default('1.5.0') }} from source
   shell: |
