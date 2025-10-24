@@ -1,5 +1,5 @@
 ---
-- name: Install minimal dependencies for sched-ext
+- name: Install dependencies for sched-ext
   apt:
     name:
       - build-essential
@@ -7,10 +7,72 @@
       - libelf-dev
       - libzstd-dev
       - pkg-config
-      - git
+      - ca-certificates
+      - zlib1g-dev
+      - gnupg
       - curl
+      - wget
+      - libseccomp-dev
+      - git
+      - rsync
     state: present
     update_cache: yes
+
+- name: Install LLVM toolchain 20
+  shell: |
+    set -e
+    export DEBIAN_FRONTEND=noninteractive
+    curl -sSL https://apt.llvm.org/llvm.sh | bash -s -- 20 all
+  args:
+    executable: /bin/bash
+    creates: /usr/bin/clang-20
+
+- name: Query clang alternative
+  command: update-alternatives --query clang
+  register: clang_alternative
+  failed_when: clang_alternative.rc not in [0, 2]
+  changed_when: false
+
+- name: Ensure clang alternative points to clang-20
+  command: update-alternatives --install /usr/bin/clang clang /usr/bin/clang-20 200
+  when: clang_alternative.rc != 0 or ('/usr/bin/clang-20' not in (clang_alternative.stdout | default('')))
+
+- name: Query clang++ alternative
+  command: update-alternatives --query clang++
+  register: clangxx_alternative
+  failed_when: clangxx_alternative.rc not in [0, 2]
+  changed_when: false
+
+- name: Ensure clang++ alternative points to clang++-20
+  command: update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-20 200
+  when: clangxx_alternative.rc != 0 or ('/usr/bin/clang++-20' not in (clangxx_alternative.stdout | default('')))
+
+- name: Query llvm-strip alternative
+  command: update-alternatives --query llvm-strip
+  register: llvmstrip_alternative
+  failed_when: llvmstrip_alternative.rc not in [0, 2]
+  changed_when: false
+
+- name: Ensure llvm-strip alternative points to llvm-strip-20
+  command: update-alternatives --install /usr/bin/llvm-strip llvm-strip /usr/bin/llvm-strip-20 200
+  when: llvmstrip_alternative.rc != 0 or ('/usr/bin/llvm-strip-20' not in (llvmstrip_alternative.stdout | default('')))
+
+- name: Build and install libbpf {{ scx_libbpf_version | default('1.5.0') }} from source
+  shell: |
+    set -e
+    LIBBPF_VERSION="{{ scx_libbpf_version | default('1.5.0') }}"
+    TMPDIR="$(mktemp -d)"
+    trap 'rm -rf "$TMPDIR"' EXIT
+    curl -sSL "https://github.com/libbpf/libbpf/archive/refs/tags/v${LIBBPF_VERSION}.tar.gz" \
+      | tar -xz --strip-components=1 -C "$TMPDIR"
+    make -C "$TMPDIR/src"
+    make -C "$TMPDIR/src" install PREFIX=/usr/local LIBDIR=/usr/local/lib
+    make -C "$TMPDIR/src" install_headers PREFIX=/usr/local
+    make -C "$TMPDIR/src" install_pkgconfig PREFIX=/usr/local LIBDIR=/usr/local/lib
+    ldconfig
+  args:
+    executable: /bin/bash
+    creates: /usr/local/lib/pkgconfig/libbpf.pc
 
 - name: Check for existing rustup installation
   become: true
@@ -25,7 +87,7 @@
   become_user: "{{ sched_ext_user }}"
   shell: |
     set -euo pipefail
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.82.0 --profile minimal
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
   args:
     executable: /bin/bash
   environment:
