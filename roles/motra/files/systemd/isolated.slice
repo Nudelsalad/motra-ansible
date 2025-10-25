@@ -5,3 +5,4 @@ Before=slices.target
 [Slice]
 AllowedCPUs=3
 AllowedMemoryNodes=0
+MemoryAccounting=yes
