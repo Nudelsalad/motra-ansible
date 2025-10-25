@@ -23,3 +23,29 @@
     accept_hostkey: yes
     version: "{{ motra_version }}"
     force: yes
+
+- name: Create systemd slice
+  become: true
+  copy:
+    dest: /etc/systemd/system/isolated.slice
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Slice for isolated, time-sensitive workloads
+      Before=slices.target
+
+      [Slice]
+      AllowedCPUs=3
+      AllowedMemoryNodes=0
+      MemoryMax=4G
+
+- name: Reload systemd to pick up isolated.slice
+  become: true
+  systemd:
+    daemon_reload: yes
+
+- name: Ensure isolated.slice is started
+  become: true
+  systemd:
+    name: isolated.slice
+    state: started

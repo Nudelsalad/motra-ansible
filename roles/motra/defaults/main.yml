@@ -6,7 +6,7 @@ motra_user: "las3"
 
 # Motra repository
 motra_repo_url: "git@git-ssh.jjitis.com:hugo/oth/masterarbeit/motra-setups.git"
-motra_version: "main"
+motra_version: "feat/prom"
 
 # Clone to system directory, then sync to user home
 motra_user_dir: "/home/{{ motra_user }}/motra"
