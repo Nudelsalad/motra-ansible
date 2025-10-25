@@ -5,6 +5,12 @@
     state: present
     update_cache: yes
 
+- name: Install linux-perf
+  apt:
+    name: linux-perf
+    state: present
+    update_cache: yes
+
 - name: Creates ssh directory
   become: true
   file:
