@@ -49,3 +49,11 @@
   systemd:
     name: isolated.slice
     state: started
+
+- name: Ensure kernel.perf_event_paranoid is set for perf access for cadvisor
+  become: true
+  sysctl:
+    name: kernel.perf_event_paranoid
+    value: "1"
+    state: present
+    reload: yes
