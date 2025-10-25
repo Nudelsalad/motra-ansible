@@ -5,11 +5,21 @@
     state: present
     update_cache: yes
 
+- name: Creates ssh directory
+  become: true
+  file:
+    path: "/home/{{ motra_user }}/.ssh"
+    state: directory
+    owner: "{{ motra_user }}"
+    group: "{{ motra_user }}"
+    mode: "0700"
+
 - name: Clone motra images repository to user directory
   become: true
   become_user: "{{ motra_user }}"
   git:
     repo: "{{ motra_repo_url }}"
     dest: "{{ motra_user_dir }}"
+    accept_hostkey: yes
     version: "{{ motra_version }}"
     force: yes
