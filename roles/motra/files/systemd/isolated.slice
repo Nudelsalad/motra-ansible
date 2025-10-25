@@ -1,0 +1,7 @@
+[Unit]
+Description=Slice for isolated plc-server single device
+Before=slices.target
+
+[Slice]
+AllowedCPUs=3
+AllowedMemoryNodes=0

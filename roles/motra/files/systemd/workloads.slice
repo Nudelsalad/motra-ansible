@@ -1,0 +1,7 @@
+[Unit]
+Description=Slice for general workloads
+Before=slices.target
+
+[Slice]
+AllowedCPUs=0-2
+AllowedMemoryNodes=0

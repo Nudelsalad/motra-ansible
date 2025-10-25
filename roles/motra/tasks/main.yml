@@ -24,31 +24,29 @@
     version: "{{ motra_version }}"
     force: yes
 
-- name: Create systemd slice
+- name: Install systemd slices from role files
   become: true
   copy:
-    dest: /etc/systemd/system/isolated.slice
+    src: "systemd/{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
     mode: "0644"
-    content: |
-      [Unit]
-      Description=Slice for isolated, time-sensitive workloads
-      Before=slices.target
+  loop:
+    - isolated.slice
+    - workloads.slice
 
-      [Slice]
-      AllowedCPUs=3
-      AllowedMemoryNodes=0
-      MemoryMax=4G
-
-- name: Reload systemd to pick up isolated.slice
+- name: Reload systemd to pick up slice units
   become: true
   systemd:
     daemon_reload: yes
 
-- name: Ensure isolated.slice is started
+- name: Ensure slices are started
   become: true
   systemd:
-    name: isolated.slice
+    name: "{{ item }}"
     state: started
+  loop:
+    - isolated.slice
+    - workloads.slice
 
 - name: Ensure kernel.perf_event_paranoid is set for perf access for cadvisor
   become: true
