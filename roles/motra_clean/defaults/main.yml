@@ -1,0 +1,5 @@
+---
+# Defaults for motra_clean role
+
+motra_user: "las3"
+motra_user_dir: "/home/{{ motra_user }}/motra"

@@ -1,0 +1,31 @@
+---
+# Clean up all Docker containers, images, volumes and remove the motra working directory
+
+- name: Stop and remove ALL containers forcefully
+  become: true
+  shell: |
+    set -euo pipefail
+    if command -v docker >/dev/null 2>&1; then
+      CONTAINERS=$(docker ps -aq)
+      if [ -n "$CONTAINERS" ]; then
+        docker rm -f $CONTAINERS || true
+      fi
+    fi
+  args:
+    executable: /bin/bash
+
+- name: Prune Docker system
+  become: true
+  shell: |
+    set -euo pipefail
+    if command -v docker >/dev/null 2>&1; then
+      docker system prune -a -f --volumes || true
+    fi
+  args:
+    executable: /bin/bash
+
+- name: Remove motra working directory
+  become: true
+  file:
+    path: "{{ motra_user_dir }}"
+    state: absent

@@ -47,6 +47,12 @@ ansible-playbook -i inventory.ini site.yml
 ansible-playbook -i inventory.ini site.yml -t docker,sched_ext
 ```
 
+### 4. Remove motra for debug purp
+
+```bash
+ansible-playbook -i inventory.ini motra-clean.yml
+```
+
 ## Roles
 
 ### kernel
