@@ -21,6 +21,8 @@ Streamlined Ansible playbook to provision a Raspberry Pi with:
 ansible-galaxy install -r requirements.yml
 ```
 
+### 2. Configure motra access
+
 Adjust motra github repo URL in `roles/motra/vars/main.yml` if necessary.
 If using a private repo, edit your local ssh config (`~/.ssh/config`) to
 enable agent forwarding:
