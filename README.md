@@ -45,6 +45,9 @@ ansible-playbook -i inventory.ini site.yml
 
 # Only specific roles
 ansible-playbook -i inventory.ini site.yml -t docker,sched_ext
+
+# Only specific role on specific host
+ansible-playbook -i inventory.ini site.yml -l 'client-attacker' -t docker
 ```
 
 ### 4. Remove motra for debug purp

@@ -1,9 +1,4 @@
 ---
-- name: Install docker compose plugin
-  apt:
-    name: docker-compose-plugin
-    state: present
-    update_cache: yes
 
 - name: Creates ssh directory
   become: true

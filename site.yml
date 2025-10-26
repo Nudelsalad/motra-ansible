@@ -7,6 +7,11 @@
   vars:
     docker_users:
       - las3
+    docker_add_repo: true
+    docker_install_compose_plugin: true
+    docker_compose_package: docker-compose-plugin
+    docker_compose_package_state: present
+    docker_install_compose: false
 
   pre_tasks:
     - name: Update apt cache
