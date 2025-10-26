@@ -54,10 +54,10 @@
     - isolated.slice
     - workloads.slice
 
-- name: Ensure kernel.perf_event_paranoid is set for perf access for cadvisor
+- name: Ensure kernel.perf_event_paranoid is set
   become: true
   sysctl:
     name: kernel.perf_event_paranoid
-    value: "1"
+    value: "-1"
     state: present
     reload: yes
