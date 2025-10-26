@@ -74,7 +74,7 @@
     state: absent
   when: kernel_tmp.path is defined
 
-- name: Update bootloader (Raspberry Pi OS)
+- name: Update bootloader
   apt:
     name: rpi-eeprom
     state: present
@@ -87,6 +87,38 @@
     replace: '\\1 cgroup_enable=cpuset cgroup_enable=memory cgroup_memory=1'
     backup: yes
   when: grep_cgroup.rc != 0
+
+- name: Install systemd slices from role files
+  become: true
+  copy:
+    src: "systemd/{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - isolated.slice
+    - workloads.slice
+
+- name: Reload systemd to pick up slice units
+  become: true
+  systemd:
+    daemon_reload: yes
+
+- name: Ensure slices are started
+  become: true
+  systemd:
+    name: "{{ item }}"
+    state: started
+  loop:
+    - isolated.slice
+    - workloads.slice
+
+- name: Ensure kernel.perf_event_paranoid is set
+  become: true
+  sysctl:
+    name: kernel.perf_event_paranoid
+    value: "-1"
+    state: present
+    reload: yes
 
 - name: Reboot after kernel install
   reboot:
@@ -101,3 +133,8 @@
 - name: Show running kernel
   debug:
     msg: "Running kernel: {{ uname_out.stdout }}"
+
+- name: Install perf tools for specific kernel
+  apt:
+    name: "linux-tools-{{ kernel_version }}"
+    state: present

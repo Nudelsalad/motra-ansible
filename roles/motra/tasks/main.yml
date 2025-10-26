@@ -5,12 +5,6 @@
     state: present
     update_cache: yes
 
-- name: Install linux-perf
-  apt:
-    name: linux-perf
-    state: present
-    update_cache: yes
-
 - name: Creates ssh directory
   become: true
   file:
@@ -29,35 +23,3 @@
     accept_hostkey: yes
     version: "{{ motra_version }}"
     force: yes
-
-- name: Install systemd slices from role files
-  become: true
-  copy:
-    src: "systemd/{{ item }}"
-    dest: "/etc/systemd/system/{{ item }}"
-    mode: "0644"
-  loop:
-    - isolated.slice
-    - workloads.slice
-
-- name: Reload systemd to pick up slice units
-  become: true
-  systemd:
-    daemon_reload: yes
-
-- name: Ensure slices are started
-  become: true
-  systemd:
-    name: "{{ item }}"
-    state: started
-  loop:
-    - isolated.slice
-    - workloads.slice
-
-- name: Ensure kernel.perf_event_paranoid is set
-  become: true
-  sysctl:
-    name: kernel.perf_event_paranoid
-    value: "-1"
-    state: present
-    reload: yes
