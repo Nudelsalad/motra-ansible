@@ -22,6 +22,8 @@
   roles:
     - role: kernel
       tags: kernel
+    - role: systweaks
+      tags: systweaks
     - role: geerlingguy.docker
       tags: docker
     - role: sched_ext

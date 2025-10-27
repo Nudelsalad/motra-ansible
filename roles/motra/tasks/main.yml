@@ -1,4 +1,8 @@
 ---
+- name: Install perf tools for specific kernel
+  apt:
+    name: "linux-tools-{{ kernel_version }}"
+    state: present
 
 - name: Creates ssh directory
   become: true
