@@ -3,6 +3,9 @@ Description=Slice for general workloads
 Before=slices.target
 
 [Slice]
-AllowedCPUs=0-2
+AllowedCPUs=0-1
 AllowedMemoryNodes=0
 MemoryAccounting=yes
+CPUAccounting=yes
+IOAccounting=yes
+Delegate=yes

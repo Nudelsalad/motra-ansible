@@ -3,6 +3,9 @@ Description=Slice for isolated plc-server single device
 Before=slices.target
 
 [Slice]
-AllowedCPUs=3
+AllowedCPUs=2-3
 AllowedMemoryNodes=0
 MemoryAccounting=yes
+CPUAccounting=yes
+IOAccounting=yes
+Delegate=yes
