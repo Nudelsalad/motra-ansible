@@ -5,7 +5,7 @@
 sched_ext_user: "las3"
 
 # Whether to clone the scx repo (for reference/examples)
-scx_clone_repo: false
+scx_clone_repo: true
 scx_clone_dir: "/home/{{ sched_ext_user }}/scx"
 scx_version: "v1.0.17"
 

@@ -84,7 +84,7 @@
     create: yes
     state: present
 
-- name: Clone scx repository (optional, for reference/examples)
+- name: Clone scx repository
   git:
     repo: https://github.com/sched-ext/scx.git
     dest: "{{ scx_clone_dir }}"
