@@ -20,8 +20,6 @@
         cache_valid_time: 3600
 
   roles:
-    - role: kernel
-      tags: kernel
     - role: systweaks
       tags: systweaks
     - role: geerlingguy.docker
