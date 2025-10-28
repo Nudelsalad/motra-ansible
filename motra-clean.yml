@@ -1,6 +1,6 @@
 ---
 - name: Cleanup Docker and remove motra working directory
-  hosts: rpi
+  hosts: all
   become: true
   vars_files:
     - vars/prod.yml
@@ -8,3 +8,5 @@
   roles:
     - role: motra_clean
       tags: motra_clean
+    - role: motra
+      tags: motra
