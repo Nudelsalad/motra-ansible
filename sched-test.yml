@@ -4,8 +4,8 @@
 #   ansible-playbook -i inventory.ini sched-test.yml -e sched_test_scenario=baseline -e sched_test_scheduler=cfs
 #   ansible-playbook -i inventory.ini sched-test.yml -e sched_test_scenario=attack -e sched_test_scheduler=bpfland -e sched_test_attack=true -e sched_test_attack_duration=180
 
-- name: Run sched-test across Raspberry Pi server and client
-  hosts: all
+- name: Run sched-test on server only
+  hosts: rpiserver
   become: true
   vars_files:
     - vars/prod.yml

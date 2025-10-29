@@ -68,7 +68,9 @@
   become_user: "{{ sched_ext_user }}"
   shell: |
     set -euo pipefail
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+      sh -s -- -y --profile minimal --default-toolchain nightly-2025-10-28
+    "$HOME/.cargo/bin/rustup" component add rustfmt --toolchain nightly-2025-10-28 || true
   args:
     executable: /bin/bash
   environment:
@@ -84,7 +86,19 @@
     create: yes
     state: present
 
+- name: Ensure scx repo directory exists and is owned by user
+  become: true
+  file:
+    path: "{{ scx_clone_dir }}"
+    state: directory
+    owner: "{{ sched_ext_user }}"
+    group: "{{ sched_ext_user }}"
+    mode: "0755"
+  when: scx_clone_repo | bool
+
 - name: Clone scx repository
+  become: true
+  become_user: "{{ sched_ext_user }}"
   git:
     repo: https://github.com/sched-ext/scx.git
     dest: "{{ scx_clone_dir }}"
@@ -92,16 +106,172 @@
     force: yes
   when: scx_clone_repo | bool
 
-- name: Install sched-ext schedulers and tools from crates.io
+- name: Ensure scx repo ownership recursively (in case of pre-existing files)
+  become: true
+  file:
+    path: "{{ scx_clone_dir }}"
+    state: directory
+    owner: "{{ sched_ext_user }}"
+    group: "{{ sched_ext_user }}"
+    recurse: true
+  when: scx_clone_repo | bool
+
+- name: Place pinned Rust toolchain file in scx repo
   become: true
   become_user: "{{ sched_ext_user }}"
-  shell: |
+  copy:
+    src: rust-toolchain.toml
+    dest: "{{ scx_clone_dir }}/rust-toolchain.toml"
+    mode: "0644"
+  when: scx_clone_repo | bool
+
+  # Toolchain file ensures the pinned nightly is used in-repo; rustup will auto-install if missing.
+
+- name: Build C schedulers (make all)
+  become: true
+  become_user: "{{ sched_ext_user }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    make all
+  args:
+    chdir: "{{ scx_clone_dir }}"
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ sched_ext_user }}"
+    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.cargo/bin"
+  when: scx_clone_repo | bool
+
+- name: Build Rust schedulers (cargo build --release)
+  become: true
+  become_user: "{{ sched_ext_user }}"
+  ansible.builtin.shell: |
     set -euo pipefail
     export PATH="$HOME/.cargo/bin:$PATH"
-    cargo install {{ item }}
+    cargo build --release
+  args:
+    chdir: "{{ scx_clone_dir }}"
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ sched_ext_user }}"
+  when: scx_clone_repo | bool
+
+- name: Install C schedulers to user cargo bin
+  become: true
+  become_user: "{{ sched_ext_user }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    make install INSTALL_DIR="$HOME/.cargo/bin"
+  args:
+    chdir: "{{ scx_clone_dir }}"
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ sched_ext_user }}"
+  when: scx_clone_repo | bool
+
+- name: Discover Rust scheduler crates in repo
+  ansible.builtin.find:
+    paths: "{{ scx_clone_dir }}/scheds/rust"
+    patterns: "scx_*"
+    file_type: directory
+  register: scx_rust_sched_dirs
+  when: scx_clone_repo | bool
+
+- name: Install Rust schedulers from source (cargo install --path)
+  become: true
+  become_user: "{{ sched_ext_user }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PATH="$HOME/.cargo/bin:$PATH"
+    cargo install --path "{{ item.path }}" --force
   args:
     executable: /bin/bash
   environment:
     HOME: "/home/{{ sched_ext_user }}"
-  loop: "{{ scx_crates_to_install }}"
-  when: scx_crates_to_install | length > 0
+  loop: "{{ scx_rust_sched_dirs.files | default([]) }}"
+  when:
+    - scx_clone_repo | bool
+    - scx_rust_sched_dirs.matched | default(0) | int > 0
+
+- name: Install scx tools (loader, ctl, scxtop) from repo
+  become: true
+  become_user: "{{ sched_ext_user }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PATH="$HOME/.cargo/bin:$PATH"
+    cargo install --path "{{ scx_clone_dir }}/tools/scx_loader" --force
+    cargo install --path "{{ scx_clone_dir }}/tools/scxctl" --force
+    cargo install --path "{{ scx_clone_dir }}/tools/scxtop" --force
+  args:
+    executable: /bin/bash
+  environment:
+    HOME: "/home/{{ sched_ext_user }}"
+  when: scx_clone_repo | bool
+
+- name: Ensure scx_loader is available at /usr/bin
+  file:
+    src: "/home/{{ sched_ext_user }}/.cargo/bin/scx_loader"
+    dest: "/usr/bin/scx_loader"
+    state: link
+
+- name: Install D-Bus service file for org.scx.Loader
+  copy:
+    dest: /usr/share/dbus-1/system-services/org.scx.Loader.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [D-BUS Service]
+      Name=org.scx.Loader
+      Exec=/usr/bin/scx_loader
+      User=root
+      SystemdService=scx_loader.service
+
+- name: Install D-Bus policy for org.scx.Loader
+  copy:
+    dest: /usr/share/dbus-1/system.d/org.scx.Loader.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      <!DOCTYPE busconfig PUBLIC
+       "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+       "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+      <busconfig>
+          <policy user="root">
+              <allow own="org.scx.Loader"/>
+              <allow send_destination="org.scx.Loader"/>
+              <allow receive_sender="org.scx.Loader"/>
+          </policy>
+          <policy context="default">
+              <allow send_destination="org.scx.Loader"/>
+              <allow receive_sender="org.scx.Loader"/>
+          </policy>
+      </busconfig>
+
+- name: Install systemd unit for scx_loader
+  copy:
+    dest: /etc/systemd/system/scx_loader.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=DBUS on-demand loader of sched-ext schedulers
+
+      [Service]
+      Type=dbus
+      BusName=org.scx.Loader
+      ExecStart=/usr/bin/scx_loader
+      KillSignal=SIGINT
+
+      [Install]
+      WantedBy=graphical.target
+
+- name: Reload systemd units
+  command: systemctl daemon-reload
+
+- name: Enable scx_loader service
+  systemd:
+    name: scx_loader.service
+    enabled: yes
+    state: stopped
