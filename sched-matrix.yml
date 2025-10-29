@@ -1,0 +1,66 @@
+---
+# Matrix executor for scheduler/scenario experiments
+# Edit sched_test_runs below to customize your matrix.
+
+- name: Run scheduler matrix on server only
+  hosts: rpiserver
+  become: true
+  vars_files:
+    - vars/prod.yml
+  vars:
+    # Default matrix: baseline without attack and attack with duration
+    sched_test_runs:
+      - { scenario: "baseline", scheduler: "cfs", attack: false, duration: 150 }
+      - {
+          scenario: "baseline",
+          scheduler: "scx_bpfland",
+          attack: false,
+          duration: 150,
+        }
+      - {
+          scenario: "baseline",
+          scheduler: "scx_lavd",
+          attack: false,
+          duration: 150,
+        }
+      - {
+          scenario: "baseline",
+          scheduler: "scx_rusty",
+          attack: false,
+          duration: 150,
+        }
+      - { scenario: "attack", scheduler: "cfs", attack: true, duration: 180 }
+      - {
+          scenario: "attack",
+          scheduler: "scx_bpfland",
+          attack: true,
+          duration: 180,
+        }
+      - {
+          scenario: "attack",
+          scheduler: "scx_lavd",
+          attack: true,
+          duration: 180,
+        }
+      - {
+          scenario: "attack",
+          scheduler: "scx_rusty",
+          attack: true,
+          duration: 180,
+        }
+
+  tasks:
+    - name: Run sched-test for each matrix entry
+      include_role:
+        name: sched-test
+      vars:
+        sched_test_scenario: "{{ item.scenario }}"
+        sched_test_scheduler: "{{ item.scheduler }}"
+        sched_test_attack: "{{ item.attack }}"
+        sched_test_attack_duration: "{{ item.duration }}"
+      loop: "{{ sched_test_runs }}"
+
+    - name: Cooldown between runs (server only)
+      ansible.builtin.wait_for:
+        timeout: 20
+      when: "'rpiserver' in group_names"
