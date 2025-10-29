@@ -33,6 +33,7 @@
         sched_test_scheduler: "{{ item.scheduler }}"
         sched_test_attack: "{{ item.attack }}"
         sched_test_attack_duration: "{{ item.duration }}"
+        sched_test_attack_delegate: "raspiclient"
       loop: "{{ sched_test_runs }}"
 
     - name: Cooldown between runs (server only)

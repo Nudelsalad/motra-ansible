@@ -1,89 +1,91 @@
-# Raspberry Pi Ansible Setup
+# Raspberry Pi Scheduler Experiment Harness
 
-Streamlined Ansible playbook to provision a Raspberry Pi with:
+Ansible automation to provision a two-node Raspberry Pi setup (server + client), build and switch Linux sched-ext schedulers, run a targeted attacker from the client, and collect per-scheduler performance telemetry with Docker + cAdvisor + Prometheus + Grafana.
 
-- **Custom kernel** (from .deb packages)
-- **Docker** (via geerlingguy.docker)
-- **sched-ext schedulers**
-- **motra**
+- Server (rpiserver): runs monitoring (cAdvisor/Redis) and the PLC stack as needed
+- Client (rpiclient): runs the attacker container against the server
+- Dashboards: provisioned Grafana views with per-scheduler overlays (Thesis Overview, Perf Overview)
+
+## What this does
+
+- Installs Docker and required tooling
+- Builds sched-ext from source with a pinned Rust toolchain (nightly-2025-10-28)
+- Switches schedulers via `scxctl` with safe fallbacks to direct binaries
+- Starts only the monitoring subset of the PLC stack (cAdvisor + Redis) for profiling
+- Exposes a “scheduler” label to Prometheus and overlays series by scheduler in Grafana
+- Orchestrates experiment runs via a scheduler matrix, optionally with an attacker
+- Runs the attacker from the client to generate realistic remote load
 
 ## Prerequisites
 
-- Ansible installed on your control machine
-- SSH access to target Raspberry Pi
-- Kernel .deb files in `kernel/` directory (if using kernel role)
+- Ansible installed on the control machine
+- SSH access to both Raspberry Pis (server and client)
+- Inventory configured in `inventory.ini`
 
-## Quick Start
+Optional: if pulling private images or repos, set up SSH agent forwarding locally.
 
-### 1. Install Galaxy dependencies
+## Inventory
 
-```bash
+Edit `inventory.ini` to point to your hosts. Example:
+
+```
+[rpiserver]
+raspiserver ansible_host=<server_ip> ansible_user=<user> ansible_password=<pwd> ansible_become_password=<pwd>
+
+[rpiclient]
+raspiclient ansible_host=<client_ip> ansible_user=<user> ansible_password=<pwd> ansible_become_password=<pwd>
+```
+
+## Quick start
+
+1. Install Galaxy deps
+
+```
 ansible-galaxy install -r requirements.yml
 ```
 
-### 2. Configure motra access
+2. Provision the nodes (Docker, sched-ext, motra workspace)
 
-Adjust motra github repo URL in `roles/motra/vars/main.yml` if necessary.
-If using a private repo, edit your local ssh config (`~/.ssh/config`) to
-enable agent forwarding:
-
-```Host your_rpi_hostname_or_ip
-    ForwardAgent yes
 ```
-
-This way no key files need to be copied manually to the Raspberry Pi.
-
-### 2. Configure inventory
-
-Edit `inventory.ini` to point to your Raspberry Pi.
-
-### 3. Run the playbook
-
-```bash
-# Full provisioning
 ansible-playbook -i inventory.ini site.yml
-
-# Only specific roles
-ansible-playbook -i inventory.ini site.yml -t docker,sched_ext
-
-# Only specific role on specific host
-ansible-playbook -i inventory.ini site.yml -l 'client-attacker' -t docker
 ```
 
-### 4. Remove motra for debug purp
+3. Run the scheduler matrix (server-only orchestration; attacker runs on client)
 
-```bash
+```
+ansible-playbook -i inventory.ini plays/sched-matrix.yml
+```
+
+4. Optional cleanup
+
+```
 ansible-playbook -i inventory.ini motra-clean.yml
 ```
 
+## Key playbooks
+
+- `site.yml` — Full provisioning of Docker, sched-ext (from source), and motra workspace
+- `plays/sched-matrix.yml` — Runs a matrix of schedulers with/without attacker
+  - Attacker is delegated to the client (`rpiclient`) while monitoring runs on the server
+  - Forces Docker Compose to recreate monitoring so label changes (scheduler) are reflected
+- `motra-clean.yml` — Removes motra working directory and stops related containers
+
 ## Roles
 
-### kernel
+- `sched_ext` — Installs rustup (single step, pinned nightly), builds scx from source, provides `scxctl`
+- `sched-test` — Writes SCHEDULER into compose .env, switches schedulers (`scxctl` or fallback),
+  brings up monitoring (cadvisor, redis), runs the attacker on the client, and performs cleanup
 
-Installs custom kernel from .deb packages (place in `kernel/` directory).
+## Observability
 
-### sched_ext
+- Prometheus scrapes cAdvisor with the container label `scheduler`
+- Grafana dashboards use a Scheduler variable and overlay time series by scheduler
+- Key panels cover IPC/CPI/MPKI and stall ratios, plus instruction/cycle rates
 
-Installs Rust 1.82+ and sched-ext schedulers from crates.io.
+## Notes
 
-**Default schedulers**:
+- Attacker runs from the client to generate realistic network load against the server
+- Only monitoring services are started by default to keep test noise low
+- Compose is forced to recreate monitoring between runs to refresh labels
 
-- scxctl, scxtop, scx_loader, scx_flash, scx_lavd, scx_rusty, scx_bpfland
-
-**Customize** in `vars/prod.yml`:
-
-```yaml
-scx_crates_to_install:
-  - scxctl
-  - scx_flash
-```
-
-**Clone scx repo** (optional, for reference):
-
-```bash
-ansible-playbook -i inventory.ini site.yml -t sched_ext -e scx_clone_repo=true
-```
-
-### motra
-
-Clones and runs motra Docker Compose stack.
+If a run is interrupted, simply re-run the play; the tasks are idempotent and will converge.

@@ -16,6 +16,21 @@
     - { key: "SCHEDULER", value: "{{ sched_test_scheduler }}" }
   tags: [env, sched_test]
 
+- name: Show run profile summary (one line)
+  ansible.builtin.debug:
+    msg: "RUN PROFILE: scheduler={{ sched_test_scheduler }} attack={{ sched_test_attack }} duration={{ sched_test_attack_duration }}s on {{ inventory_hostname }} (attacker on {{ sched_test_attack_delegate | default(inventory_hostname) }})"
+  tags: [summary, sched_test]
+
+- name: Append run profile to history log on server
+  become: true
+  become_user: "{{ motra_user }}"
+  ansible.builtin.shell: |
+    echo "$(date -Is) scheduler={{ sched_test_scheduler }} attack={{ sched_test_attack }} duration={{ sched_test_attack_duration }}s host={{ inventory_hostname }} attacker={{ sched_test_attack_delegate | default(inventory_hostname) }}" >> run-history.log
+  args:
+    chdir: "{{ sched_test_workdir }}"
+    executable: /bin/bash
+  tags: [summary, sched_test]
+
 - name: Manage scheduler switching
   block:
     - name: Switch scheduler - stop sched_ext (cfs)
@@ -101,12 +116,12 @@
 # -----------------------------------------------------------------
 - name: Run test scenario with guaranteed cleanup
   block:
-    - name: Bring up monitoring profile on plc stack
+    - name: Bring up only monitoring services on plc stack (cadvisor, redis)
       become: true
       become_user: "{{ motra_user }}"
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -f plc.yml --profile monitoring up -d --force-recreate --remove-orphans
+        docker compose -f plc.yml up -d --force-recreate --remove-orphans cadvisor redis
       args:
         chdir: "{{ sched_test_workdir }}"
         executable: /bin/bash
@@ -117,15 +132,16 @@
         timeout: "{{ sched_test_wait_after_up }}"
       tags: [wait, sched_test]
 
-    - name: Start attacker (server) when enabled
+    - name: Start attacker on delegate (client) when enabled
       become: true
       become_user: "{{ motra_user }}"
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -f attacker.yml up -d
+        docker compose -p attacker -f attacker.yml up -d cve-attacker
       args:
         chdir: "{{ sched_test_workdir }}"
         executable: /bin/bash
+      delegate_to: "{{ sched_test_attack_delegate | default(inventory_hostname) }}"
       when:
         - sched_test_attack | bool
       tags: [attack, sched_test]
@@ -144,15 +160,14 @@
       tags: [attack, sched_test]
 
   always:
-    - name: Stop attacker container (cleanup)
+    - name: Stop attacker container on delegate (cleanup)
       become: true
       become_user: "{{ motra_user }}"
       ansible.builtin.docker_container:
         name: cve-attacker
         state: absent
         force_kill: yes
-      args:
-        chdir: "{{ sched_test_workdir }}"
+      delegate_to: "{{ sched_test_attack_delegate | default(inventory_hostname) }}"
       when:
         - sched_test_attack | bool
         - sched_test_stop_attack_after | bool
