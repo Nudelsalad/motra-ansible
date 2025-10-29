@@ -1,0 +1,107 @@
+---
+- name: Ensure SCENARIO and SCHEDULER are set in compose .env
+  become: true
+  become_user: "{{ motra_user }}"
+  lineinfile:
+    path: "{{ sched_test_workdir }}/.env"
+    regexp: "^{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+    create: yes
+  loop:
+    - { key: "SCENARIO", value: "{{ sched_test_scenario }}" }
+    - { key: "SCHEDULER", value: "{{ sched_test_scheduler }}" }
+  tags: [env, sched_test]
+
+- name: Switch scheduler - stop sched_ext (cfs)
+  become: true
+  command: "/home/{{ motra_user }}/.cargo/bin/scxctl stop"
+  register: scxctl_stop
+  changed_when: "scxctl_stop.rc == 0"
+  failed_when: false
+  when:
+    - sched_test_switch_scheduler | bool
+    - sched_test_scheduler | lower == 'cfs'
+  tags: [scheduler, sched_test]
+
+- name: Switch scheduler - start sched_ext via scx_loader
+  become: true
+  command: "/home/{{ motra_user }}/.cargo/bin/scx_loader {{ sched_test_scheduler }}"
+  register: scx_loader_start
+  changed_when: "scx_loader_start.rc == 0"
+  failed_when: false
+  when:
+    - sched_test_switch_scheduler | bool
+    - sched_test_scheduler | lower != 'cfs'
+  tags: [scheduler, sched_test]
+
+- name: Bring up monitoring profile on plc stack (server)
+  become: true
+  become_user: "{{ motra_user }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    docker compose -f plc.yml --profile monitoring up -d
+  args:
+    chdir: "{{ sched_test_workdir }}"
+    executable: /bin/bash
+  when: "'rpiserver' in group_names"
+  tags: [compose, server, monitoring, sched_test]
+
+- name: Bring up plant stacks (client)
+  become: true
+  become_user: "{{ motra_user }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    docker compose -f levelsensor-server.yml -f headunit.yml -f monitoring.yml -f valve-server.yml up -d
+  args:
+    chdir: "{{ sched_test_workdir }}"
+    executable: /bin/bash
+  when: "'rpiclient' in group_names"
+  tags: [compose, client, plant, sched_test]
+
+- name: Wait for services to settle
+  ansible.builtin.wait_for:
+    timeout: "{{ sched_test_wait_after_up }}"
+  tags: [wait, sched_test]
+
+- name: Start attacker (server) when enabled
+  become: true
+  become_user: "{{ motra_user }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    docker compose -f attacker.yml --profile attack up -d
+  args:
+    chdir: "{{ sched_test_workdir }}"
+    executable: /bin/bash
+  when:
+    - sched_test_attack | bool
+    - "'rpiserver' in group_names"
+  tags: [attack, sched_test]
+
+- name: Optional pre-attack wait
+  ansible.builtin.wait_for:
+    timeout: "{{ sched_test_wait_before_attack }}"
+  when: sched_test_attack | bool
+  tags: [wait, sched_test]
+
+- name: Run attack for duration (server)
+  ansible.builtin.wait_for:
+    timeout: "{{ sched_test_attack_duration }}"
+  when:
+    - sched_test_attack | bool
+    - "'rpiserver' in group_names"
+  tags: [attack, sched_test]
+
+- name: Stop attacker container when requested (server)
+  become: true
+  become_user: "{{ motra_user }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    docker rm -f cve-attacker || true
+  args:
+    chdir: "{{ sched_test_workdir }}"
+    executable: /bin/bash
+  when:
+    - sched_test_attack | bool
+    - sched_test_stop_attack_after | bool
+    - "'rpiserver' in group_names"
+  tags: [attack, cleanup, sched_test]
