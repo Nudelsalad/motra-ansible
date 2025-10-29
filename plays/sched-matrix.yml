@@ -1,0 +1,41 @@
+---
+- name: Run scheduler matrix on server only
+  hosts: rpiserver
+  become: true
+  vars_files:
+    - vars/prod.yml
+  vars:
+    sched_test_runs:
+      - { scheduler: "cfs", attack: true, duration: 180 }
+      - { scheduler: "scx_bpfland", attack: true, duration: 180 }
+      - { scheduler: "scx_chaos", attack: true, duration: 180 }
+      - { scheduler: "scx_cosmos", attack: true, duration: 180 }
+      - { scheduler: "scx_flash", attack: true, duration: 180 }
+      - { scheduler: "scx_mitosis", attack: true, duration: 180 }
+      - { scheduler: "scx_p2dq", attack: true, duration: 180 }
+      - { scheduler: "scx_rlfifo", attack: true, duration: 180 }
+      - { scheduler: "scx_rustland", attack: true, duration: 180 }
+      - { scheduler: "cfs", attack: false, duration: 150 }
+      - { scheduler: "scx_bpfland", attack: false, duration: 150 }
+      - { scheduler: "scx_chaos", attack: false, duration: 150 }
+      - { scheduler: "scx_cosmos", attack: false, duration: 150 }
+      - { scheduler: "scx_flash", attack: false, duration: 150 }
+      - { scheduler: "scx_mitosis", attack: false, duration: 150 }
+      - { scheduler: "scx_p2dq", attack: false, duration: 150 }
+      - { scheduler: "scx_rlfifo", attack: false, duration: 150 }
+      - { scheduler: "scx_rustland", attack: false, duration: 150 }
+
+  tasks:
+    - name: Run sched-test for each matrix entry
+      include_role:
+        name: sched-test
+      vars:
+        sched_test_scheduler: "{{ item.scheduler }}"
+        sched_test_attack: "{{ item.attack }}"
+        sched_test_attack_duration: "{{ item.duration }}"
+      loop: "{{ sched_test_runs }}"
+
+    - name: Cooldown between runs (server only)
+      ansible.builtin.wait_for:
+        timeout: 20
+      when: "'rpiserver' in group_names"

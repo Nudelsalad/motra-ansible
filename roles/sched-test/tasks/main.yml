@@ -106,7 +106,7 @@
       become_user: "{{ motra_user }}"
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -f plc.yml --profile monitoring up -d
+        docker compose -f plc.yml --profile monitoring up -d --force-recreate --remove-orphans
       args:
         chdir: "{{ sched_test_workdir }}"
         executable: /bin/bash
@@ -122,7 +122,7 @@
       become_user: "{{ motra_user }}"
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -f attacker.yml --profile attack up -d
+        docker compose -f attacker.yml up -d
       args:
         chdir: "{{ sched_test_workdir }}"
         executable: /bin/bash
