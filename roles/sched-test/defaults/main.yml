@@ -32,6 +32,8 @@ sched_test_heavy_load: false
 sched_test_kernel_src: "/home/{{ motra_user }}/linux"
 # niceness for the build
 sched_test_heavy_load_nice: 19
+# duration for heavy-load-only runs (seconds)
+sched_test_heavy_load_duration: 180
 
 # Raspberry Pi kernel build parameters
 sched_test_kernel_name: "kernel_2712"

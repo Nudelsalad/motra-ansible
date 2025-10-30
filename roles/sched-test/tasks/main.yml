@@ -16,16 +16,21 @@
     - { key: "SCHEDULER", value: "{{ sched_test_scheduler }}" }
   tags: [env, sched_test]
 
+- name: Compute effective run duration
+  set_fact:
+    sched_test_effective_duration: "{{ (sched_test_attack | bool) | ternary(sched_test_attack_duration, sched_test_heavy_load_duration) }}"
+  tags: [summary, sched_test]
+
 - name: Show run profile summary (one line)
   ansible.builtin.debug:
-    msg: "RUN PROFILE: scheduler={{ sched_test_scheduler }} attack={{ sched_test_attack }} (service={{ sched_test_attack_service }}) heavy_load={{ sched_test_heavy_load }} duration={{ sched_test_attack_duration }}s on {{ inventory_hostname }} (attacker on {{ sched_test_attack_delegate | default(inventory_hostname) }}, heavy on {{ inventory_hostname }})"
+    msg: "RUN PROFILE: scheduler={{ sched_test_scheduler }} attack={{ sched_test_attack }} (service={{ sched_test_attack_service }}) heavy_load={{ sched_test_heavy_load }} duration={{ sched_test_effective_duration }}s on {{ inventory_hostname }} (attacker on {{ sched_test_attack_delegate | default(inventory_hostname) }}, heavy on {{ inventory_hostname }})"
   tags: [summary, sched_test]
 
 - name: Append run profile to history log on server
   become: true
   become_user: "{{ motra_user }}"
   ansible.builtin.shell: |
-    echo "$(date -Is) scheduler={{ sched_test_scheduler }} attack={{ sched_test_attack }} heavy_load={{ sched_test_heavy_load }} duration={{ sched_test_attack_duration }}s host={{ inventory_hostname }} attacker={{ sched_test_attack_delegate | default(inventory_hostname) }} heavy_host={{ inventory_hostname }}" >> run-history.log
+    echo "$(date -Is) scheduler={{ sched_test_scheduler }} attack={{ sched_test_attack }} heavy_load={{ sched_test_heavy_load }} duration={{ sched_test_effective_duration }}s host={{ inventory_hostname }} attacker={{ sched_test_attack_delegate | default(inventory_hostname) }} heavy_host={{ inventory_hostname }}" >> run-history.log
   args:
     chdir: "{{ sched_test_workdir }}"
     executable: /bin/bash
@@ -183,12 +188,10 @@
       when: sched_test_attack | bool
       tags: [wait, sched_test]
 
-    - name: Run attack '{{ sched_test_attack_service }}' for duration (server)
+    - name: Run for duration (server)
       ansible.builtin.wait_for:
-        timeout: "{{ sched_test_attack_duration }}"
-      when:
-        - sched_test_attack | bool
-      tags: [attack, sched_test]
+        timeout: "{{ sched_test_effective_duration }}"
+      tags: [run, sched_test]
 
   always:
     - name: Stop heavy load on server (cleanup)

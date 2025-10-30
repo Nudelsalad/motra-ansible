@@ -9,31 +9,32 @@
       - { scheduler: "cfs", attack: true, duration: 180 }
       - { scheduler: "scx_bpfland", attack: true, duration: 180 }
       - { scheduler: "scx_chaos", attack: true, duration: 180 }
-      - { scheduler: "scx_cosmos", attack: true, duration: 180 }
-      - { scheduler: "scx_flash", attack: true, duration: 180 }
-      - { scheduler: "scx_mitosis", attack: true, duration: 180 }
-      - { scheduler: "scx_p2dq", attack: true, duration: 180 }
-      - { scheduler: "scx_rlfifo", attack: true, duration: 180 }
-      - { scheduler: "scx_rustland", attack: true, duration: 180 }
-      - { scheduler: "cfs", attack: false, duration: 150 }
-      - { scheduler: "scx_bpfland", attack: false, duration: 150 }
-      - { scheduler: "scx_chaos", attack: false, duration: 150 }
-      - { scheduler: "scx_cosmos", attack: false, duration: 150 }
-      - { scheduler: "scx_flash", attack: false, duration: 150 }
-      - { scheduler: "scx_mitosis", attack: false, duration: 150 }
       - { scheduler: "scx_p2dq", attack: false, duration: 150 }
       - { scheduler: "scx_rlfifo", attack: false, duration: 150 }
       - { scheduler: "scx_rustland", attack: false, duration: 150 }
+      - { scheduler: "scx_simple", attack: false, duration: 150 }
+      - { scheduler: "scx_qmap", attack: false, duration: 150 }
+      - { scheduler: "scx_central", attack: false, duration: 150 }
+      - { scheduler: "scx_nest", attack: false, duration: 150 }
+      - { scheduler: "scx_flatcg", attack: false, duration: 150 }
+      # - { scheduler: "scx_cosmos", attack: true, duration: 180 }
+      # - { scheduler: "scx_flash", attack: true, duration: 180 }
+      # - { scheduler: "scx_mitosis", attack: true, duration: 180 }
+      # - { scheduler: "scx_p2dq", attack: true, duration: 180 }
+      # - { scheduler: "scx_rlfifo", attack: true, duration: 180 }
+      # - { scheduler: "scx_rustland", attack: true, duration: 180 }
+      # - { scheduler: "cfs", attack: false, duration: 150 }
+      # - { scheduler: "scx_bpfland", attack: false, duration: 150 }
+      # - { scheduler: "scx_chaos", attack: false, duration: 150 }
+      # - { scheduler: "scx_cosmos", attack: false, duration: 150 }
+      # - { scheduler: "scx_flash", attack: false, duration: 150 }
+      # - { scheduler: "scx_mitosis", attack: false, duration: 150 }
 
   tasks:
-    - name: Run sched-test for each matrix entry
-      include_role:
-        name: sched-test
+    - name: Run paired passes sequentially per scheduler entry
+      include_tasks: _scheduler_pair.yml
       vars:
-        sched_test_scheduler: "{{ item.scheduler }}"
-        sched_test_attack: "{{ item.attack }}"
-        sched_test_attack_duration: "{{ item.duration }}"
-        sched_test_attack_delegate: "raspiclient"
+        run: "{{ item }}"
       loop: "{{ sched_test_runs }}"
 
     - name: Cooldown between runs (server only)
