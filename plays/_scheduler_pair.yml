@@ -24,13 +24,13 @@
     sched_test_attack_delegate: "raspiclient"
   when: run.attack | bool
 
-- name: Heavy-load only for {{ run.scheduler }} (5 minutes) when attack=false
+- name: Heavy-load only for {{ run.scheduler }} (constant workload)
   include_role:
     name: sched-test
   vars:
     sched_test_scheduler: "{{ run.scheduler }}"
     sched_test_attack: false
     sched_test_heavy_load: true
-    sched_test_heavy_load_duration: 300
+    sched_test_heavy_load_duration: "{{ run.duration }}"
     sched_test_attack_delegate: "raspiclient"
   when: not (run.attack | bool)
