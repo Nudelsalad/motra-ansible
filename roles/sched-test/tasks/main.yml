@@ -18,14 +18,14 @@
 
 - name: Show run profile summary (one line)
   ansible.builtin.debug:
-    msg: "RUN PROFILE: scheduler={{ sched_test_scheduler }} attack={{ sched_test_attack }} duration={{ sched_test_attack_duration }}s on {{ inventory_hostname }} (attacker on {{ sched_test_attack_delegate | default(inventory_hostname) }})"
+    msg: "RUN PROFILE: scheduler={{ sched_test_scheduler }} attack={{ sched_test_attack }} (service={{ sched_test_attack_service }}) heavy_load={{ sched_test_heavy_load }} duration={{ sched_test_attack_duration }}s on {{ inventory_hostname }} (attacker on {{ sched_test_attack_delegate | default(inventory_hostname) }}, heavy on {{ inventory_hostname }})"
   tags: [summary, sched_test]
 
 - name: Append run profile to history log on server
   become: true
   become_user: "{{ motra_user }}"
   ansible.builtin.shell: |
-    echo "$(date -Is) scheduler={{ sched_test_scheduler }} attack={{ sched_test_attack }} duration={{ sched_test_attack_duration }}s host={{ inventory_hostname }} attacker={{ sched_test_attack_delegate | default(inventory_hostname) }}" >> run-history.log
+    echo "$(date -Is) scheduler={{ sched_test_scheduler }} attack={{ sched_test_attack }} heavy_load={{ sched_test_heavy_load }} duration={{ sched_test_attack_duration }}s host={{ inventory_hostname }} attacker={{ sched_test_attack_delegate | default(inventory_hostname) }} heavy_host={{ inventory_hostname }}" >> run-history.log
   args:
     chdir: "{{ sched_test_workdir }}"
     executable: /bin/bash
@@ -132,12 +132,43 @@
         timeout: "{{ sched_test_wait_after_up }}"
       tags: [wait, sched_test]
 
-    - name: Start attacker on delegate (client) when enabled
+    - name: Check for kernel source for heavy load (server)
+      stat:
+        path: "{{ sched_test_kernel_src }}"
+      register: kernel_src_stat
+      when: sched_test_heavy_load | bool
+      tags: [heavy, sched_test]
+
+    - name: Start heavy load (kernel build) on server
       become: true
       become_user: "{{ motra_user }}"
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -p attacker -f attacker.yml up -d cve-attacker
+        cd "{{ sched_test_kernel_src }}"
+        KERNEL={{ sched_test_kernel_name }} make {{ sched_test_kernel_defconfig }}
+        KERNEL={{ sched_test_kernel_name }} nice -n {{ sched_test_heavy_load_nice }} make -j{{ sched_test_kernel_make_jobs }} {{ sched_test_kernel_targets }} \
+          1>"/tmp/kernel-build.out" 2>"/tmp/kernel-build.err" & echo $! > "/tmp/kernel-build.pid"
+      args:
+        executable: /bin/bash
+      when:
+        - sched_test_heavy_load | bool
+        - kernel_src_stat.stat.isdir | default(false)
+      tags: [heavy, sched_test]
+
+    - name: Warn if kernel source missing on server
+      ansible.builtin.debug:
+        msg: "Heavy load requested but kernel source not found at {{ sched_test_kernel_src }} on {{ inventory_hostname }} — skipping heavy load."
+      when:
+        - sched_test_heavy_load | bool
+        - not (kernel_src_stat.stat.isdir | default(false))
+      tags: [heavy, sched_test]
+
+    - name: Start attack '{{ sched_test_attack_service }}' on delegate (client) when enabled
+      become: true
+      become_user: "{{ motra_user }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker compose -p attacker -f attacker.yml up -d {{ sched_test_attack_service }}
       args:
         chdir: "{{ sched_test_workdir }}"
         executable: /bin/bash
@@ -152,7 +183,7 @@
       when: sched_test_attack | bool
       tags: [wait, sched_test]
 
-    - name: Run attack for duration (server)
+    - name: Run attack '{{ sched_test_attack_service }}' for duration (server)
       ansible.builtin.wait_for:
         timeout: "{{ sched_test_attack_duration }}"
       when:
@@ -160,11 +191,24 @@
       tags: [attack, sched_test]
 
   always:
-    - name: Stop attacker container on delegate (cleanup)
+    - name: Stop heavy load on server (cleanup)
+      become: true
+      become_user: "{{ motra_user }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if [ -f /tmp/kernel-build.pid ]; then
+          kill -9 "$(cat /tmp/kernel-build.pid)" || true
+          rm -f /tmp/kernel-build.pid
+        fi
+      args:
+        executable: /bin/bash
+      when: sched_test_heavy_load | bool
+      tags: [heavy, cleanup, sched_test]
+    - name: Stop attack '{{ sched_test_attack_service }}' container on delegate (cleanup)
       become: true
       become_user: "{{ motra_user }}"
       ansible.builtin.docker_container:
-        name: cve-attacker
+        name: "{{ sched_test_attack_service }}"
         state: absent
         force_kill: yes
       delegate_to: "{{ sched_test_attack_delegate | default(inventory_hostname) }}"

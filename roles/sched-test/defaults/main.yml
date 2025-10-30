@@ -7,9 +7,8 @@ motra_user: "las3"
 # Directory containing the multi-dev docker-compose files on target hosts
 sched_test_workdir: "/home/{{ motra_user }}/motra/simple-water-treatment-plant/multi-dev"
 
-# Scenario and scheduler labels to apply to compose services
 sched_test_scenario: "baseline"
-sched_test_scheduler: "cfs" # cfs | bpfland | lavd | rusty | flash | scx_<name>
+sched_test_scheduler: "cfs"
 
 # Whether to attempt switching the host scheduler via sched-ext
 # If true and scheduler != cfs, will try scx_loader <scheduler>
@@ -17,6 +16,7 @@ sched_test_switch_scheduler: true
 
 # Attack toggle and duration (run on rpiserver using attacker.yml profile="attack")
 sched_test_attack: false
+sched_test_attack_service: "cve-attacker" # docker compose service name of the attack to run
 sched_test_attack_duration: 120 # seconds
 
 # Grace periods
@@ -25,3 +25,16 @@ sched_test_wait_before_attack: 5
 
 # Whether to stop the attacker container after duration
 sched_test_stop_attack_after: true
+
+# Optional heavy load: compile a Linux kernel to generate CPU load
+sched_test_heavy_load: false
+# Path to Linux kernel source on the delegate host
+sched_test_kernel_src: "/home/{{ motra_user }}/linux"
+# niceness for the build
+sched_test_heavy_load_nice: 19
+
+# Raspberry Pi kernel build parameters
+sched_test_kernel_name: "kernel_2712"
+sched_test_kernel_defconfig: "bcm2712_defconfig"
+sched_test_kernel_targets: "Image.gz modules dtbs"
+sched_test_kernel_make_jobs: 4
