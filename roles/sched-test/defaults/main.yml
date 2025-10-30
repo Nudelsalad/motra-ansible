@@ -17,7 +17,7 @@ sched_test_switch_scheduler: true
 # Attack toggle and duration (run on rpiserver using attacker.yml profile="attack")
 sched_test_attack: false
 sched_test_attack_service: "cve-attacker" # docker compose service name of the attack to run
-sched_test_attack_duration: 120 # seconds
+sched_test_attack_duration: 300 # seconds (default 5 minutes)
 
 # Grace periods
 sched_test_wait_after_up: 10
@@ -33,10 +33,35 @@ sched_test_kernel_src: "/home/{{ motra_user }}/linux"
 # niceness for the build
 sched_test_heavy_load_nice: 19
 # duration for heavy-load-only runs (seconds)
-sched_test_heavy_load_duration: 180
+sched_test_heavy_load_duration: 300
 
 # Raspberry Pi kernel build parameters
 sched_test_kernel_name: "kernel_2712"
 sched_test_kernel_defconfig: "bcm2712_defconfig"
 sched_test_kernel_targets: "Image.gz modules dtbs"
 sched_test_kernel_make_jobs: 4
+
+# Grafana annotation integration
+sched_test_grafana_annotations: true
+sched_test_grafana_url: "http://10.80.0.131:3000"
+sched_test_grafana_user: "admin"
+sched_test_grafana_password: "admin"
+sched_test_grafana_dashboard_uid: "cadvisor-perf-overview-swtp"
+sched_test_grafana_tags:
+  - "sched-test"
+
+# scxctl operation timeouts (seconds)
+sched_test_scxctl_timeout: 10
+sched_test_scxctl_stop_timeout: 5
+
+# Kernel build package sets (Debian family)
+sched_test_kernel_packages_core:
+  - build-essential
+  - bc
+  - bison
+  - flex
+  - libssl-dev
+  - libelf-dev
+  - libncurses-dev
+  - libncurses5-dev
+  - libncursesw5-dev

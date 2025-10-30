@@ -1,6 +1,6 @@
 ---
 # Run attack-first then heavy-load for the same scheduler entry when attack=true,
-# otherwise run heavy-load only for 180s.
+# otherwise run heavy-load only for 300s (5 minutes).
 
 - name: Attack pass for {{ run.scheduler }} (only when attack=true)
   include_role:
@@ -24,13 +24,13 @@
     sched_test_attack_delegate: "raspiclient"
   when: run.attack | bool
 
-- name: Heavy-load only for {{ run.scheduler }} (3 minutes) when attack=false
+- name: Heavy-load only for {{ run.scheduler }} (5 minutes) when attack=false
   include_role:
     name: sched-test
   vars:
     sched_test_scheduler: "{{ run.scheduler }}"
     sched_test_attack: false
     sched_test_heavy_load: true
-    sched_test_heavy_load_duration: 180
+    sched_test_heavy_load_duration: 300
     sched_test_attack_delegate: "raspiclient"
   when: not (run.attack | bool)

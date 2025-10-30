@@ -9,11 +9,13 @@
   become_user: "{{ motra_user }}"
   lineinfile:
     path: "{{ sched_test_workdir }}/.env"
-    regexp: "^{{ item.key }}="
-    line: "{{ item.key }}={{ item.value }}"
+    regexp: "^{{ env_var.key }}="
+    line: "{{ env_var.key }}={{ env_var.value }}"
     create: yes
   loop:
     - { key: "SCHEDULER", value: "{{ sched_test_scheduler }}" }
+  loop_control:
+    loop_var: env_var
   tags: [env, sched_test]
 
 - name: Compute effective run duration
@@ -38,43 +40,45 @@
 
 - name: Manage scheduler switching
   block:
-    - name: Switch scheduler - stop sched_ext (cfs)
+    - name: Reset fallback flag
+      set_fact:
+        sched_test_fallback_needed: false
+
+    - name: Stop sched_ext scheduler if running
       become: true
-      command: "{{ scxctl_bin_path }} stop"
+      ansible.builtin.command:
+        argv:
+          - "{{ scxctl_bin_path }}"
+          - stop
       register: scxctl_stop
       changed_when: "scxctl_stop.rc == 0"
       failed_when: false
-      when: sched_test_scheduler | lower == 'cfs'
 
     - name: Derive scheduler name for scxctl (strip scx_ prefix)
       set_fact:
         sched_test_loader_name: "{{ (sched_test_scheduler | lower) | regex_replace('^scx_', '') }}"
       when: sched_test_scheduler | lower != 'cfs'
 
-    - name: Switch scheduler via scxctl (try switch first)
+    - name: Start scheduler via scxctl
       become: true
-      command: "{{ scxctl_bin_path }} switch -s {{ sched_test_loader_name | default(sched_test_scheduler | lower) }}"
-      register: scx_switch_result
-      changed_when: "scx_switch_result.rc == 0"
-      failed_when: false
-      when: sched_test_scheduler | lower != 'cfs'
-
-    - name: Start scheduler via scxctl when switch failed
-      become: true
-      command: "{{ scxctl_bin_path }} start -s {{ sched_test_loader_name | default(sched_test_scheduler | lower) }}"
+      ansible.builtin.command:
+        argv:
+          - "{{ scxctl_bin_path }}"
+          - start
+          - -s
+          - "{{ sched_test_loader_name | default(sched_test_scheduler | lower) }}"
       register: scx_start_result
       changed_when: "scx_start_result.rc == 0"
       failed_when: false
       when:
         - sched_test_scheduler | lower != 'cfs'
-        - scx_switch_result.rc | default(0) != 0 # Simplified
 
     - name: Decide if fallback to direct scheduler binary is needed
       set_fact:
         sched_test_fallback_needed: true
       when:
         - sched_test_scheduler | lower != 'cfs'
-        - scx_start_result.rc | default(0) != 0 # Simplified
+        - scx_start_result.rc | default(0) != 0
 
     - name: Compute direct scheduler binary path
       set_fact:
@@ -137,12 +141,83 @@
         timeout: "{{ sched_test_wait_after_up }}"
       tags: [wait, sched_test]
 
+    - name: Ensure kernel build dependencies on Debian/Ubuntu (server)
+      when:
+        - sched_test_heavy_load | bool
+        - ansible_os_family == "Debian"
+      block:
+        - name: Install core kernel build packages
+          become: true
+          ansible.builtin.apt:
+            name: "{{ sched_test_kernel_packages_core }}"
+            state: present
+            update_cache: yes
+          tags: [heavy, deps, sched_test]
+
+    - name: Warn when OS family is not Debian for heavy load deps
+      ansible.builtin.debug:
+        msg: "Heavy load requested on non-Debian OS family ({{ ansible_os_family }}); kernel build deps not auto-installed."
+      when:
+        - sched_test_heavy_load | bool
+        - ansible_os_family != "Debian"
+      tags: [heavy, deps, sched_test]
+
+    - name: Capture run start timestamp (ms)
+      ansible.builtin.command: date +%s%3N
+      register: sched_test_run_start_cmd
+      changed_when: false
+      args:
+        executable: /bin/bash
+      tags: [run, sched_test]
+
+    - name: Set run start fact
+      set_fact:
+        sched_test_run_start_ms: "{{ sched_test_run_start_cmd.stdout | int }}"
+      tags: [run, sched_test]
+
     - name: Check for kernel source for heavy load (server)
       stat:
         path: "{{ sched_test_kernel_src }}"
       register: kernel_src_stat
       when: sched_test_heavy_load | bool
       tags: [heavy, sched_test]
+
+    - name: Stop lingering kernel build before starting new one
+      become: true
+      become_user: "{{ motra_user }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if [ -f /tmp/kernel-build.pid ]; then
+          target_pid="$(cat /tmp/kernel-build.pid)"
+          if [ -n "$target_pid" ] && kill -0 "$target_pid" 2>/dev/null; then
+            target_comm="$(ps -p "$target_pid" -o comm= 2>/dev/null || true)"
+            if [ "$target_comm" = "make" ]; then
+              kill -9 "$target_pid" || true
+            fi
+          fi
+          rm -f /tmp/kernel-build.pid
+        fi
+        pkill -9 -u "{{ motra_user }}" -x make || true
+      args:
+        executable: /bin/bash
+      when:
+        - sched_test_heavy_load | bool
+        - kernel_src_stat.stat.isdir | default(false)
+      tags: [heavy, cleanup, sched_test]
+
+    - name: Clean kernel tree before heavy load
+      become: true
+      become_user: "{{ motra_user }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        make clean || true
+      args:
+        chdir: "{{ sched_test_kernel_src }}"
+        executable: /bin/bash
+      when:
+        - sched_test_heavy_load | bool
+        - kernel_src_stat.stat.isdir | default(false)
+      tags: [heavy, prepare, sched_test]
 
     - name: Start heavy load (kernel build) on server
       become: true
@@ -193,6 +268,19 @@
         timeout: "{{ sched_test_effective_duration }}"
       tags: [run, sched_test]
 
+    - name: Capture run end timestamp (ms)
+      ansible.builtin.command: date +%s%3N
+      register: sched_test_run_end_cmd
+      changed_when: false
+      args:
+        executable: /bin/bash
+      tags: [run, sched_test]
+
+    - name: Set run end fact
+      set_fact:
+        sched_test_run_end_ms: "{{ sched_test_run_end_cmd.stdout | int }}"
+      tags: [run, sched_test]
+
   always:
     - name: Stop heavy load on server (cleanup)
       become: true
@@ -200,11 +288,47 @@
       ansible.builtin.shell: |
         set -euo pipefail
         if [ -f /tmp/kernel-build.pid ]; then
-          kill -9 "$(cat /tmp/kernel-build.pid)" || true
+          target_pid="$(cat /tmp/kernel-build.pid)"
+          if [ -n "$target_pid" ] && kill -0 "$target_pid" 2>/dev/null; then
+            target_comm="$(ps -p "$target_pid" -o comm= 2>/dev/null || true)"
+            if [ "$target_comm" = "make" ]; then
+              kill -9 "$target_pid" || true
+            fi
+          fi
           rm -f /tmp/kernel-build.pid
         fi
+        pkill -9 -u "{{ motra_user }}" -x make || true
       args:
         executable: /bin/bash
+      when: sched_test_heavy_load | bool
+      tags: [heavy, cleanup, sched_test]
+
+    - name: Clean kernel build artifacts on server
+      become: true
+      become_user: "{{ motra_user }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        make clean || true
+      args:
+        chdir: "{{ sched_test_kernel_src }}"
+        executable: /bin/bash
+      when:
+        - sched_test_heavy_load | bool
+        - kernel_src_stat is defined
+        - kernel_src_stat.stat.isdir | default(false)
+      tags: [heavy, cleanup, sched_test]
+
+    - name: Remove kernel build logs
+      become: true
+      become_user: "{{ motra_user }}"
+      ansible.builtin.file:
+        path: "/tmp/{{ log_file }}"
+        state: absent
+      loop:
+        - kernel-build.out
+        - kernel-build.err
+      loop_control:
+        loop_var: log_file
       when: sched_test_heavy_load | bool
       tags: [heavy, cleanup, sched_test]
     - name: Stop attack '{{ sched_test_attack_service }}' container on delegate (cleanup)
