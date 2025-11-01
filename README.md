@@ -43,12 +43,13 @@ ansible-playbook -i inventory.ini site.yml
 ```
 
 3. Run the scheduler sweep
+   Make sure there is a kernel available in the users home folder!
 
 ```
 ansible-playbook -i inventory.ini plays/sched-matrix.yml
 ```
 
-4. Optional cleanup
+4. Motra Reset
 
 ```
 ansible-playbook -i inventory.ini motra-clean.yml
