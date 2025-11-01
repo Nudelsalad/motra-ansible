@@ -162,7 +162,7 @@
     export PATH="$HOME/.cargo/bin:$PATH"
     cargo install scx_loader
     cargo install scxctl
-    cargo install --git https://github.com/sched-ext/scx --branch main --package scxtop
+    cargo install --git https://github.com/sched-ext/scx --branch main scxtop
   args:
     executable: /bin/bash
   environment:
