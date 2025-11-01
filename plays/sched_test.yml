@@ -22,4 +22,4 @@
       - scx_simple
 
   roles:
-    - role: sched-test
+    - role: sched_test
