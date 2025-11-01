@@ -1,6 +1,4 @@
 ---
-# Clean up all Docker containers, images, volumes and remove the motra working directory
-
 - name: Stop and remove ALL containers forcefully
   become: true
   shell: |

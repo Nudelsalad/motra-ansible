@@ -14,51 +14,26 @@
     - "files/kernel/*.deb"
   register: copied_debs
 
-- name: Derive kernel version from linux-image .deb filename
-  set_fact:
-    kernel_version: "{{ (copied_debs.results | map(attribute='dest') | map('basename') | select('match','^linux-image-.*\\.deb$') | list | first | regex_replace('^linux-image-(.+)_.+\\.deb$','\\1')) }}"
+- name: Pre-create kernel directory expected by postinst
+  become: true
+  file:
+    path: "/usr/lib/linux-image-{{ kernel_version }}"
+    state: directory
+    mode: "0755"
 
-- name: Pre-create overlays directory expected by postinst
+- name: Pre-create overlays subdirectory
+  become: true
   file:
     path: "/usr/lib/linux-image-{{ kernel_version }}/overlays"
     state: directory
     mode: "0755"
-  when: kernel_version is defined and kernel_version | length > 0
 
 - name: Ensure overlays README exists
-  file:
-    path: "/usr/lib/linux-image-{{ kernel_version }}/overlays/README"
-    state: touch
-    mode: "0644"
-  when: kernel_version is defined and kernel_version | length > 0
-
-- name: Install post-install hook to restore overlays README
+  become: true
   copy:
-    dest: /etc/kernel/postinst.d/00-ensure-overlays-readme
-    mode: "0755"
-    content: |
-      #!/bin/sh
-      set -eu
-
-      version="${1:-}"
-      image_dir="/usr/lib/linux-image-${version}"
-      overlays_dir="${image_dir}/overlays"
-
-      if [ -z "${version}" ]; then
-        exit 0
-      fi
-
-      if [ ! -d "${overlays_dir}" ]; then
-        mkdir -p "${overlays_dir}"
-      fi
-
-      if [ ! -f "${overlays_dir}/README" ]; then
-        printf '%s\n' \
-          'placeholder README' \
-          > "${overlays_dir}/README"
-      fi
-
-      exit 0
+    dest: "/usr/lib/linux-image-{{ kernel_version }}/overlays/README"
+    content: "LAS3\n"
+    mode: "0644"
 
 - name: Install kernel .deb files from remote temp dir
   apt:
@@ -78,7 +53,6 @@
   apt:
     name: rpi-eeprom
     state: present
-  when: ansible_distribution == 'Raspbian' or ansible_distribution == 'Raspberry Pi OS'
 
 - name: Reboot after kernel install
   reboot:

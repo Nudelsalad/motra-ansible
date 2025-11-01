@@ -1,32 +1,24 @@
-# Raspberry Pi Scheduler Experiment Harness
+# Raspberry Pi sched-ext harness (minimal)
 
-Ansible automation to provision a two-node Raspberry Pi setup (server + client), build and switch Linux sched-ext schedulers, run a targeted attacker from the client, and collect per-scheduler performance telemetry with Docker + cAdvisor + Prometheus + Grafana.
+Small Ansible setup to compare Linux sched-ext schedulers on a two-node Raspberry Pi rig using Docker + cAdvisor + Prometheus + Grafana.
 
-- Server (rpiserver): runs monitoring (cAdvisor/Redis) and the PLC stack as needed
-- Client (rpiclient): runs the attacker container against the server
-- Dashboards: provisioned Grafana views with per-scheduler overlays (Thesis Overview, Perf Overview)
+- Server (`rpiserver`): runs the workload (kernel build) and cAdvisor
+- Client (`rpiclient`): runs Prometheus/Grafana and owns the file_sd target JSON
 
-## What this does
+## What it does
 
-- Installs Docker and required tooling
-- Builds sched-ext from source with a pinned Rust toolchain (nightly-2025-10-28)
-- Switches schedulers via `scxctl` with safe fallbacks to direct binaries
-- Starts only the monitoring subset of the PLC stack (cAdvisor + Redis) for profiling
-- Exposes a “scheduler” label to Prometheus and overlays series by scheduler in Grafana
-- Orchestrates experiment runs via a scheduler matrix, optionally with an attacker
-- Runs the attacker from the client to generate realistic remote load
+- Installs Docker and basic tooling on both nodes
+- Installs sched-ext v1.0.17 (scx) and `scxctl`
+- Starts a constant kernel build on the server, then switches schedulers via `scxctl switch`
+- Holds each scheduler for a configurable dwell time, updates Prometheus file_sd with the active scheduler, then reboots the server at the end to stop the build
+- Grafana dashboards filter by the plain `scheduler` label
 
 ## Prerequisites
 
-- Ansible installed on the control machine
-- SSH access to both Raspberry Pis (server and client)
-- Inventory configured in `inventory.ini`
+- Ansible on your control machine
+- SSH access to both Pis; edit `inventory.ini` for IPs and creds
 
-Optional: if pulling private images or repos, set up SSH agent forwarding locally.
-
-## Inventory
-
-Edit `inventory.ini` to point to your hosts. Example:
+Example inventory:
 
 ```
 [rpiserver]
@@ -44,13 +36,13 @@ raspiclient ansible_host=<client_ip> ansible_user=<user> ansible_password=<pwd> 
 ansible-galaxy install -r requirements.yml
 ```
 
-2. Provision the nodes (Docker, sched-ext, motra workspace)
+2. Provision (Docker, scx, motra workspace)
 
 ```
 ansible-playbook -i inventory.ini site.yml
 ```
 
-3. Run the scheduler matrix (server-only orchestration; attacker runs on client)
+3. Run the scheduler sweep
 
 ```
 ansible-playbook -i inventory.ini plays/sched-matrix.yml
@@ -62,30 +54,8 @@ ansible-playbook -i inventory.ini plays/sched-matrix.yml
 ansible-playbook -i inventory.ini motra-clean.yml
 ```
 
-## Key playbooks
+## How it works
 
-- `site.yml` — Full provisioning of Docker, sched-ext (from source), and motra workspace
-- `plays/sched-matrix.yml` — Runs a matrix of schedulers with/without attacker
-  - Attacker is delegated to the client (`rpiclient`) while monitoring runs on the server
-  - Forces Docker Compose to recreate monitoring so label changes (scheduler) are reflected
-- `motra-clean.yml` — Removes motra working directory and stops related containers
-
-## Roles
-
-- `sched_ext` — Installs rustup (single step, pinned nightly), builds scx from source, provides `scxctl`
-- `sched-test` — Writes SCHEDULER into compose .env, switches schedulers (`scxctl` or fallback),
-  brings up monitoring (cadvisor, redis), runs the attacker on the client, and performs cleanup
-
-## Observability
-
-- Prometheus scrapes cAdvisor with the container label `scheduler`
-- Grafana dashboards use a Scheduler variable and overlay time series by scheduler
-- Key panels cover IPC/CPI/MPKI and stall ratios, plus instruction/cycle rates
-
-## Notes
-
-- Attacker runs from the client to generate realistic network load against the server
-- Only monitoring services are started by default to keep test noise low
-- Compose is forced to recreate monitoring between runs to refresh labels
-
-If a run is interrupted, simply re-run the play; the tasks are idempotent and will converge.
+- Role `sched-test` on the server starts a background kernel build and iterates schedulers with `scxctl switch -s <sched>`; each step pauses for `sched_test_switch_interval` seconds.
+- After each switch it writes `/home/<user>/motra/simple-water-treatment-plant/meta/prometheus/file_sd/target.json` on the client to set a `scheduler` label (used by Grafana).
+- When the sweep finishes, the server reboots to terminate the build cleanly.

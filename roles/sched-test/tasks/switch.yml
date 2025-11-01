@@ -1,0 +1,24 @@
+- name: Switch to {{ target_sched }} via scxctl
+  become: true
+  ansible.builtin.command:
+    argv:
+      - "{{ scxctl_bin_path }}"
+      - switch
+      - -s
+      - "{{ (target_sched | lower) | regex_replace('^scx_', '') }}"
+  failed_when: false
+
+- name: Record {{ target_sched }} in Prometheus file_sd
+  delegate_to: "{{ sched_test_prometheus_delegate_host }}"
+  ansible.builtin.copy:
+    dest: "{{ sched_test_prometheus_target_path }}"
+    content: "{{ [{'targets': sched_test_prometheus_targets, 'labels': {'job': sched_test_prometheus_job, 'scheduler': sched_test_prom_label}}] | to_nice_json }}"
+    mode: "0644"
+  vars:
+    sched_test_prom_label: "{{ target_sched }}"
+  when: sched_test_prometheus_update | bool
+
+- name: Hold {{ target_sched }} for observation
+  ansible.builtin.pause:
+    seconds: "{{ sched_test_switch_interval | int }}"
+  when: (sched_test_switch_interval | int) > 0

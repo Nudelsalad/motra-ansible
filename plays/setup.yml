@@ -1,6 +1,6 @@
 ---
 - name: Provision Raspberry Pi with kernel, Docker, and sched-ext
-  hosts: rpiserver
+  hosts: rpitest
   become: true
   vars_files:
     - vars/prod.yml

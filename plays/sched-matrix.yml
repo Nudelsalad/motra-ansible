@@ -1,35 +1,25 @@
 ---
-- name: Run scheduler matrix on server only
+- name: Simple constant workload with mid-run scheduler switching
   hosts: rpiserver
   become: true
   vars_files:
     - vars/prod.yml
   vars:
-    sched_test_runs:
-      # Constant workload: heavy-load only (kernel build) for each scheduler; 3 minutes each
-      - { scheduler: "cfs", attack: false, duration: 180 }
-      - { scheduler: "scx_bpfland", attack: false, duration: 180 }
-      - { scheduler: "scx_chaos", attack: false, duration: 180 }
-      - { scheduler: "scx_central", attack: false, duration: 180 }
-      - { scheduler: "scx_cosmos", attack: false, duration: 180 }
-      - { scheduler: "scx_flash", attack: false, duration: 180 }
-      - { scheduler: "scx_flatcg", attack: false, duration: 180 }
-      - { scheduler: "scx_mitosis", attack: false, duration: 180 }
-      - { scheduler: "scx_nest", attack: false, duration: 180 }
-      - { scheduler: "scx_p2dq", attack: false, duration: 180 }
-      - { scheduler: "scx_qmap", attack: false, duration: 180 }
-      - { scheduler: "scx_rlfifo", attack: false, duration: 180 }
-      - { scheduler: "scx_rustland", attack: false, duration: 180 }
-      - { scheduler: "scx_simple", attack: false, duration: 180 }
+    sched_test_schedulers:
+      - cfs
+      - scx_bpfland
+      - scx_chaos
+      - scx_central
+      - scx_cosmos
+      - scx_flash
+      - scx_flatcg
+      - scx_mitosis
+      - scx_nest
+      - scx_p2dq
+      - scx_qmap
+      - scx_rlfifo
+      - scx_rustland
+      - scx_simple
 
-  tasks:
-    - name: Run paired passes sequentially per scheduler entry
-      include_tasks: _scheduler_pair.yml
-      vars:
-        run: "{{ item }}"
-      loop: "{{ sched_test_runs }}"
-
-    - name: Cooldown between runs (server only)
-      ansible.builtin.wait_for:
-        timeout: 20
-      when: "'rpiserver' in group_names"
+  roles:
+    - role: sched-test
