@@ -12,6 +12,7 @@
       - gnupg
       - curl
       - wget
+      - pahole
       - libseccomp-dev
       - git
       - rsync
@@ -114,6 +115,7 @@
   environment:
     HOME: "/home/{{ sched_ext_user }}"
   when: scx_clone_repo | bool
+  failed_when: false # scx_arena_selftests error
 
 - name: Install C schedulers to user cargo bin
   become: true
