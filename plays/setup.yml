@@ -1,0 +1,30 @@
+---
+- name: Provision Raspberry Pi with kernel, Docker, and sched-ext
+  hosts: rpitest
+  become: true
+  vars_files:
+    - vars/prod.yml
+  vars:
+    docker_users:
+      - las3
+    docker_add_repo: true
+    docker_install_compose_plugin: true
+    docker_compose_package: docker-compose-plugin
+    docker_compose_package_state: present
+    docker_install_compose: false
+
+  pre_tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+  roles:
+    - role: systweaks
+      tags: systweaks
+    - role: geerlingguy.docker
+      tags: docker
+    - role: sched_ext
+      tags: sched_ext
+    - role: motra
+      tags: motra

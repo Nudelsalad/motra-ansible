@@ -1,0 +1,19 @@
+---
+- name: Simple constant workload with mid-run scheduler switching
+  hosts: rpiserver
+  become: true
+  vars_files:
+    - vars/prod.yml
+  vars:
+    sched_test_schedulers:
+      - cfs
+      - scx_simple
+      - scx_flatcg
+      - scx_pair
+      - scx_cosmos
+      - scx_mitosis
+      - scx_layered
+      - scx_rlfifo
+      - scx_rustland
+  roles:
+    - role: sched_test

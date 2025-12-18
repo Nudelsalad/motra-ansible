@@ -1,0 +1,18 @@
+motra_user: "las3"
+sched_test_schedulers: []
+
+# Kernel build settings (used to generate constant workload)
+sched_test_kernel_src: "/home/{{ motra_user }}/linux"
+sched_test_kernel_name: "kernel_2712"
+sched_test_kernel_defconfig: "bcm2712_defconfig"
+sched_test_kernel_targets: "Image.gz modules dtbs"
+sched_test_kernel_make_jobs: 4
+sched_test_heavy_load_nice: 0
+sched_test_switch_interval: 180
+sched_test_reboot_timeout: 600
+sched_test_prometheus_update: true
+sched_test_prometheus_delegate_host: raspiclient
+sched_test_prometheus_target_path: "/home/{{ motra_user }}/motra/simple-water-treatment-plant/meta/prometheus/file_sd/target.json"
+sched_test_prometheus_targets:
+  - "10.80.0.37:8080"
+sched_test_prometheus_job: cadvisor

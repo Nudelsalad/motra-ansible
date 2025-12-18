@@ -1,0 +1,35 @@
+---
+- name: Define scxctl binary path
+  set_fact:
+    scxctl_bin_path: "/home/{{ motra_user }}/.cargo/bin/scxctl"
+
+- name: Assert scheduler list provided
+  ansible.builtin.assert:
+    that:
+      - sched_test_schedulers is defined
+      - sched_test_schedulers | length > 0
+    fail_msg: "Provide sched_test_schedulers: [cfs, scx_central, scx_simple, ...]"
+
+- name: Start kernel build (background, no waits)
+  become: true
+  become_user: "{{ motra_user }}"
+  ansible.builtin.shell: |
+    set -euo pipefail
+    cd "{{ sched_test_kernel_src }}"
+    KERNEL={{ sched_test_kernel_name }} make {{ sched_test_kernel_defconfig }}
+    KERNEL={{ sched_test_kernel_name }} nice -n {{ sched_test_heavy_load_nice | default(0) }} make -j{{ sched_test_kernel_make_jobs }} {{ sched_test_kernel_targets }} \
+      1>"/tmp/kernel-build.out" 2>"/tmp/kernel-build.err" & echo $! > "/tmp/kernel-build.pid"
+  args:
+    executable: /bin/bash
+
+- name: Switch through schedulers
+  ansible.builtin.include_tasks: switch.yml
+  loop: "{{ sched_test_schedulers }}"
+  loop_control:
+    loop_var: target_sched
+
+- name: Reboot host to finish scheduler sweep
+  become: true
+  ansible.builtin.reboot:
+    msg: "sched-test role finished; rebooting to stop workload"
+    reboot_timeout: "{{ sched_test_reboot_timeout | default(600) }}"

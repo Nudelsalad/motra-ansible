@@ -1,0 +1,5 @@
+---
+sched_ext_user: "las3"
+scx_clone_repo: true
+scx_clone_dir: "/home/{{ sched_ext_user }}/scx"
+scx_version: "v1.0.17"

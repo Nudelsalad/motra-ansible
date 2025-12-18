@@ -1,0 +1,3 @@
+---
+motra_user: "las3"
+motra_user_dir: "/home/{{ motra_user }}/motra"
